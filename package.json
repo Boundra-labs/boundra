@@ -17,7 +17,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "pnpm build:packages && pnpm -r --if-present test",
-    "test:integration": "pnpm --filter @boundra/database test:integration",
+    "test:integration": "pnpm -r --if-present test:integration",
     "test:e2e": "playwright test",
     "contracts:build": "pnpm --filter @boundra/contracts build",
     "contracts:test": "pnpm --filter @boundra/contracts test",
