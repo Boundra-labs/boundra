@@ -10,7 +10,7 @@
   "scripts": {
     "env:setup": "node scripts/setup.mjs",
     "dev": "pnpm build:packages && pnpm --parallel --filter @boundra/web --filter @boundra/api --filter @boundra/worker dev",
-    "build:packages": "pnpm --filter @boundra/shared --filter @boundra/database --filter @boundra/chain build",
+    "build:packages": "pnpm --filter @boundra/shared --filter @boundra/database --filter @boundra/chain --filter @boundra/acce build",
     "build": "pnpm build:packages && pnpm --filter @boundra/web --filter @boundra/api --filter @boundra/worker build",
     "typecheck": "pnpm build:packages && pnpm -r --if-present typecheck",
     "lint": "eslint . --max-warnings 0",

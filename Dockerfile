@@ -14,6 +14,7 @@ COPY apps/web/package.json ./apps/web/package.json
 COPY packages/shared/package.json ./packages/shared/package.json
 COPY packages/database/package.json ./packages/database/package.json
 COPY packages/chain/package.json ./packages/chain/package.json
+COPY packages/acce/package.json ./packages/acce/package.json
 COPY contracts/package.json ./contracts/package.json
 RUN pnpm install --frozen-lockfile
 COPY . .
