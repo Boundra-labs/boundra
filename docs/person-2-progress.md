@@ -8,7 +8,7 @@ Rencana lengkap: [person-2-plan.md](./person-2-plan.md). Setiap fase berakhir de
 | 1    | Data model & migrasi (WS1)                                  | ✅ Selesai |
 | 2    | Lease, job queue, `ExecutionStore`, `MonitorStore` (WS2)    | ✅ Selesai |
 | 3    | ACCE engine & mandate builder (WS5, WS6 bagian murni)       | ✅ Selesai |
-| 4    | Auth SIWE & API (WS3, WS4, WS6 bagian API)                  | ⏳ Belum   |
+| 4    | Auth SIWE & API (WS3, WS4, WS6 bagian API)                  | ✅ Selesai |
 | 5    | Verifikasi otorisasi/funding & orkestrasi worker (WS6, WS7) | ⏳ Belum   |
 | 6    | E2E chain lokal (anvil)                                     | ⏳ Belum   |
 | 7    | Provider LLM (WS8)                                          | ⏳ Belum   |
@@ -80,3 +80,25 @@ Kriteria:
 - [x] Tes: `packages/acce` 19/19, `packages/shared` 8/8; lint dan format bersih.
 
 Catatan: `build:packages` di root dan `Dockerfile` ikut didaftarkan untuk paket baru; lockfile hanya bertambah importer `packages/acce`.
+
+## Fase 4 — Auth SIWE & API
+
+- **Auth** (`apps/api/src/auth/`): challenge EIP-4361 via `viem/siwe` (domain/URI dari `WEB_ORIGIN`, chain 84532, nonce sekali pakai disimpan sebagai hash, kedaluwarsa 5 menit), verifikasi tanda tangan EOA, konsumsi nonce atomik bersama seluruh field, sesi cookie `__Host-boundra_session` (HttpOnly, Secure, SameSite=Strict, 12 jam), token CSRF = HMAC(`SESSION_SECRET`, sessionId). Guard global: sesi untuk semua route non-publik, `Origin` + `X-CSRF-Token` untuk perubahan state, `ADMIN_ADDRESSES` untuk route admin.
+- **Rate limit & batas input:** `@nestjs/throttler` (default 120/menit; login 10/menit hanya pada route auth), body JSON maksimum 16 KB, error terstruktur `{ error: { code, message, recovery? } }` dengan kode stabil di `packages/shared`.
+- **Endpoint:** `auth/*`, `config/public`, `executors/register`, `intents` (+ `answers`), `intents/:id/mandate-drafts`, `mandate-drafts/:id` (GET/PATCH, `approve`, `authorization-check`), `dashboard`, `activity`, `admin/demo/reset`. OpenAPI di `/api/docs` (non-production).
+- **Chain gateway read-only** dari manifest tepercaya; tanpa manifest, fitur chain menjawab `DEPENDENCY_UNAVAILABLE` (bukan data palsu). `OPERATOR_ADDRESS` publik saja; key operator tidak pernah ada di API.
+- **`hashMandate`/`sameMandate`** di `packages/chain`, dikunci ke encoding executor oleh test vector Foundry (`contracts/test/MandateHash.t.sol`).
+- `pnpm env:setup` kini membuat `SESSION_SECRET` dan `ATTEMPT_ENCRYPTION_KEY`, juga untuk `.env` yang sudah ada (hanya menambah key yang belum ada).
+
+Kriteria:
+
+- [x] Login SIWE: cookie aman, replay ditolak, tanda tangan wallet lain/domain asing/challenge kedaluwarsa ditolak, logout mencabut sesi.
+- [x] CSRF: tanpa token, origin lain, atau token sesi lain → 403.
+- [x] Isolasi owner: intent owner lain tidak bisa dibaca maupun dijawab (404).
+- [x] Validasi intent: nominal nol/desimal, chain salah, field injeksi → 400; nominal di atas saldo yang dapat didanai → 422 sebelum otorisasi; body terlalu besar → 413; JSON rusak → 400.
+- [x] Persona A dan B lewat HTTP; draft tanpa executor ditolak; approve dengan preview basi atau revisi lama ditolak; approve mengembalikan transaksi owner persis (`setMandate`, `approve`, `fund`); `authorization-check` meng-enqueue job dan tidak pernah mengubah status menjadi AUTHORIZED.
+- [x] Dua jawaban serentak: satu 200, satu 409, satu preference record.
+- [x] Admin reset hanya untuk admin, menutup draft/intent terbuka tanpa menghapus riwayat.
+- [x] Rate limit login aktif tanpa membatasi route lain.
+- [x] API berjalan dari build (`node dist/main.js`) dan dari jalur dev (`tsx`); OpenAPI memuat 18 route.
+- [x] Tes: API integrasi 18/18 + unit 4/4, chain 10/10, Foundry 32/32, ACCE 19/19, shared 8/8, worker 11/11 + 17/17, DB 5/5; typecheck semua paket, lint dan format bersih.

@@ -6,6 +6,7 @@ export { baseSepolia };
 export * from './manifest';
 export * from './policy';
 export * from './reader';
+export * from './mandate';
 export { boundraExecutorAbi } from './abis/BoundraExecutor';
 export { boundraFactoryAbi } from './abis/BoundraFactory';
 export { mockUSDCAbi as mockUsdcAbi } from './abis/MockUSDC';

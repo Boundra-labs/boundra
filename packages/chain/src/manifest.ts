@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { z } from 'zod';
 import { getAddress } from 'viem';
 import {
@@ -50,3 +51,8 @@ export const deploymentManifestSchema = z
   });
 
 export type DeploymentManifest = z.infer<typeof deploymentManifestSchema>;
+
+/** Reads a reviewed manifest file; any schema violation is fatal for the caller. */
+export function loadDeploymentManifest(path: string): DeploymentManifest {
+  return deploymentManifestSchema.parse(JSON.parse(readFileSync(path, 'utf8')));
+}

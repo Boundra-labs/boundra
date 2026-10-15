@@ -104,6 +104,7 @@ export const errorCodes = [
   'STALE_PREVIEW',
   'INVALID_STATE',
   'DEPENDENCY_UNAVAILABLE',
+  'INTERNAL_ERROR',
 ] as const;
 export type ErrorCode = (typeof errorCodes)[number];
 
