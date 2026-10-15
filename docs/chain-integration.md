@@ -8,11 +8,11 @@ Regenerate after contract changes: `pnpm contracts:build`, then `pnpm --filter @
 
 ## Trusted deployment manifest
 
-Provide chainId 84532, factory/mockUsdc/faucet/liquidVault/timedVault/riskAdmin addresses, deploymentBlock as an integer string, and `codeHashes` for the five deployed contracts. Hashes are keccak256 of actual deployed runtime bytecode including constructor immutables. They must be reviewed against deployment artifacts/receipts, not accepted from an LLM or blindly learned from an untrusted endpoint. The schema rejects missing pins, duplicate/zero contract addresses and invalid checksums.
+Provide chainId 84532, factory/mockUsdc/faucet/liquidVault/timedVault/riskAdmin addresses, deploymentBlock as an integer string, and `codeHashes` for the five deployed contracts. Hashes are keccak256 of actual deployed runtime bytecode including constructor immutables. They must be reviewed against deployment artifacts/receipts, not accepted from an LLM or blindly learned from an untrusted endpoint. The schema rejects missing pins, duplicate/zero contract addresses and any address (including riskAdmin) not in EIP-55 checksummed form.
 
 ## Snapshot and candidate
 
-1. Instantiate a read-only client with the configured trusted RPC and construct `BoundraChainReader(client, reviewedManifest, confirmations)`.
+1. Instantiate a read-only client with the configured trusted RPC and construct `BoundraChainReader(client, reviewedManifest, confirmations, deploymentRecheckMs)`. `createReadOnlyChainClient` batches same-block reads through Multicall3. Full deployment verification (pinned code and configuration) is reused for `deploymentRecheckMs` (default 60 s) and repeated for older blocks; pass `0` to verify on every call.
 2. Call `snapshot(authenticatedOwner, registeredExecutor)`. It verifies pinned code, factory/token/vault/faucet configuration, owner registration and immutable executor addresses/chain. All data comes from one block at configured confirmation depth. A block-hash change during observation rejects the snapshot.
 3. Build an action envelope containing actionId, kind DEPOSIT/WITHDRAW, mandateVersion, nonce, deadline, target and amount. Integer fields are canonical base-unit strings at the wire boundary. There is no recipient or arbitrary calldata field.
 4. `prepareAction(snapshot, envelope, operatorAddress)` rejects stale observations, invalid authority/expiry/nonce/version, wrong targets, action restrictions, caps, funding, lockup, repeated allocations and unavailable withdrawals. The result fixes calldata to one of the two reviewed executor methods.

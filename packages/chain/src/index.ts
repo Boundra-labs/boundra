@@ -19,6 +19,8 @@ export function createReadOnlyChainClient(rpcUrl: string) {
   if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Unsupported RPC protocol');
   return createPublicClient({
     chain: baseSepolia,
+    // Aggregates concurrent reads at the same block into Multicall3 calls to stay under RPC limits.
+    batch: { multicall: true },
     transport: http(url.toString(), { timeout: 10_000, retryCount: 2 }),
   });
 }

@@ -42,12 +42,10 @@ export const deploymentManifestSchema = z
     }
     if (/^0x0{40}$/i.test(manifest.riskAdmin))
       context.addIssue({ code: 'custom', message: 'Risk admin required' });
-    for (const name of contractNames) {
-      try {
-        getAddress(manifest[name]);
-      } catch {
+    // Reviewed manifests must carry EIP-55 checksummed addresses; lowercase is not accepted.
+    for (const name of [...contractNames, 'riskAdmin'] as const) {
+      if (manifest[name] !== getAddress(manifest[name]))
         context.addIssue({ code: 'custom', path: [name], message: 'Invalid address checksum' });
-      }
     }
   });
 

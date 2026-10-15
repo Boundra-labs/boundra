@@ -243,6 +243,9 @@ test('manifest rejects absent code pins, duplicate addresses and wrong chain', (
     { ...m, chainId: 1 },
     { ...m, liquidVault: m.factory },
     { ...m, factory: addr(0) },
+    // Valid EIP-55 is 0xcA11bde05977b3631167028862bE2a173976CA11.
+    { ...m, factory: '0xca11bde05977b3631167028862be2a173976ca11' },
+    { ...m, riskAdmin: '0xCA11bde05977b3631167028862bE2a173976CA11' },
   ]) {
     assert.equal(deploymentManifestSchema.safeParse(invalid).success, false);
   }
