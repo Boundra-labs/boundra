@@ -4,9 +4,9 @@
 
 ## Status
 
-This repository is the initialized engineering foundation, not a completed wallet. Available: Next.js UI shell and injected-wallet connection, NestJS API health/OpenAPI, NestJS observe-only worker heartbeat, PostgreSQL/Prisma schema and migration, exact-amount schemas, read-only viem adapter, Foundry MockUSDC fixture, Docker/CI and smoke tests.
+This repository contains the application foundation and Person 1's local contract/chain implementation, not a completed integrated wallet. Available: Next.js UI shell and injected-wallet connection, NestJS API health/OpenAPI, PostgreSQL/Prisma, exact-amount schemas, controlled mock vaults, bounded owner executors/factory, capped faucet, typed ABIs, verified chain snapshots, transaction/reconciliation modules, risk-event monitor, deployment script, Docker/CI and tests.
 
-Still to implement: wallet authentication, ACCE/provider integration, reviewed mandate schemas, factory/executor/vault contracts, faucet, owner funding/approval flow, agent execution, risk monitoring/reconciliation, benchmark and public deployment evidence. No deployment addresses, transaction hashes or performance claims are invented.
+Still to integrate: wallet authentication, ACCE/provider, frontend mandate/funding flow, Person 2's durable PostgreSQL execution/monitor ports and worker lifecycle, benchmark, and public deployment evidence. The worker remains observe-only until the persistence/runtime activation gates are met. No deployment addresses, transaction hashes or performance claims are invented. See [Person 1 progress](./docs/person-1-progress.md) and [worker integration port](./docs/worker-chain-port.md).
 
 ## Requirements
 

@@ -70,12 +70,12 @@ Perubahan dependency disampaikan ke Person 3 untuk menyatukan lockfile. Perubaha
 
 ### Definition of done
 
-- [ ] Foundry tests lolos; tidak ada invariant failure terbuka.
-- [ ] ABI, manifest, typed adapter dan error codes bisa dipakai Person 2/3.
+- [x] Foundry tests lolos; tidak ada invariant failure terbuka pada run lokal.
+- [x] ABI, schema manifest, typed adapter dan error codes tersedia; manifest deployment aktual masih menunggu public deployment.
 - [ ] Deposit dan risk-response withdrawal LiquidVault terbukti melalui receipt publik.
-- [ ] Operator tidak dapat memperluas authority walaupun verifier backend dilewati.
+- [x] Direct-call tests membuktikan operator tidak dapat memperluas authority dalam skenario yang diuji.
 - [ ] Chain recovery tests lolos dan hasilnya dapat ditelusuri.
-- [ ] `docs/contracts.md` dan `docs/security.md` lengkap beserta bukti.
+- [x] `docs/contracts.md` dan `docs/security.md` tersedia dengan bukti lokal serta batas pengujian; receipt publik tetap pending.
 
 **Dependensi:** shared action/mandate schema dan repository locks/cursors dari Person 2; runtime RPC, gas, serta signer secrets yang tersedia melalui environment.
 
