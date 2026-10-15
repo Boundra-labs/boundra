@@ -29,3 +29,13 @@ No automatic fee escalation or replacement is implemented. A consumed nonce with
 ## Activation gate
 
 Supply a reviewed deployment manifest, funded restricted operator, explicit positive gas/fee limits and the durable store. Reject operator equal to risk admin; deployment operations must also keep deployer and operator keys separate. The API/worker must verify confirmed owner authorization and funding before dispatch. Owner private keys are never backend input. Public Base Sepolia evidence is still required before claiming a completed demo.
+
+## Risk monitor store
+
+`RiskEventMonitor` in `monitor.ts` reads only the two pinned mock-vault sources at configured confirmation depth. It checks deployment code, each log's canonical block hash and the end-of-batch block hash. Historical event risk is recorded separately from current risk/capacity at the batch's confirmed head; an old warning does not override a recovered NORMAL state.
+
+Implement `MonitorStore` with a renewable fenced lease, persistent `(nextBlock, previousBlockHash)` cursor and atomic `commitBatch(expectedCursor, nextCursor, observations)`. Event identity is `(chainId, txHash, logIndex)` with canonical block hash attached. Overlap rescans must upsert without producing duplicate decisions. Enqueue new decision work in the same PostgreSQL transaction as the event/cursor update, using stable idempotency keys.
+
+Cursor hash mismatch or chain regression triggers `rewind` to the trusted deployment block. Without stored ancestor history, full rescan is the conservative fallback for a deeper-than-overlap reorg. `rewind` must mark affected observations orphaned and invalidate pending derived decisions atomically. It must not erase receipt history or pretend executed transactions were undone; affected actions go through reconciliation.
+
+Normal scans overlap at least 20 blocks, bounded in configurable batches. Never dispatch directly from event text: reconcile current vault/position/mandate through `BoundraChainReader`, enforce freshness and policy, then use the execution service. RPC errors or invalid/removed/unknown-source logs do not advance the cursor. Person 2 owns store migrations and real PostgreSQL/restart/concurrency integration tests.

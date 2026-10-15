@@ -1,5 +1,5 @@
 # Chain execution boundary — Person 1
 
-Implement trusted chain reads, operator signing, event ingestion, confirmation/reorg handling and transaction reconciliation here. Consume shared types and PostgreSQL repositories from Person 2. No transaction sender or private-key access exists in the scaffold.
+`execution.ts` implements restricted signing, simulation, persistence-before-broadcast and transaction reconciliation behind a required durable store port. `monitor.ts` implements confirmed, canonical mock-vault event ingestion and reorg/cursor recovery. See `docs/worker-chain-port.md` for Person 2's PostgreSQL and lifecycle integration contract.
 
-Do not enable value movement until PRD authorization, budget, expiry, beneficiary and replay requirements have contract-level tests and reviewed deployment manifests.
+These classes are not auto-wired into WorkerModule. The existing worker remains heartbeat-only until durable PostgreSQL ports, reviewed deployment/runtime credentials and PRD release gates are integrated. No owner key belongs on the server. Unit tests use test-only in-memory ports and do not claim real PostgreSQL concurrency or public-chain execution evidence.
