@@ -1,5 +1,8 @@
 import { randomBytes } from 'node:crypto';
 import {
+  decodeFunctionData,
+  encodeAbiParameters,
+  encodeEventTopics,
   keccak256,
   parseTransaction,
   toHex,
@@ -7,17 +10,19 @@ import {
   TransactionReceiptNotFoundError,
   type Address,
   type Hash,
+  type Hex,
   type TransactionReceipt,
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import type { BoundraChainReader, ExecutorSnapshot } from '@boundra/chain';
+import { boundraExecutorAbi, type BoundraChainReader, type ExecutorSnapshot } from '@boundra/chain';
 
 export const randomAddress = () => `0x${randomBytes(20).toString('hex')}` as Address;
 export const randomHash = () => `0x${randomBytes(32).toString('hex')}` as Hash;
 
 /**
- * In-memory chain for exercising the execution/monitor services against real persistence.
- * Network behaviour (timeouts, mempool, receipts) is scripted per test.
+ * In-memory chain for exercising the execution/monitor services and the orchestrator against
+ * real persistence. `mine` applies a signed executor call to the snapshot like the contract
+ * would and publishes a canonical receipt with the ActionExecuted event.
  */
 export function fakeChain() {
   // Random per-run operator key: tests never share a signer lease or nonce space.
@@ -32,12 +37,22 @@ export function fakeChain() {
   const snapshots = new Map<string, ExecutorSnapshot>();
   const liquid = randomAddress();
   const timed = randomAddress();
+  const token = randomAddress();
+  const manifest = {
+    chainId: 84532,
+    factory: randomAddress(),
+    mockUsdc: token,
+    faucet: randomAddress(),
+    liquidVault: liquid,
+    timedVault: timed,
+    riskAdmin: randomAddress(),
+    deploymentBlock: '1',
+  };
 
-  function snapshotFor(owner: Address, executor: Address): ExecutorSnapshot {
+  function snapshotOf(owner: Address, executor: Address): ExecutorSnapshot {
     const key = executor.toLowerCase();
     let snapshot = snapshots.get(key);
     if (!snapshot) {
-      const token = randomAddress();
       snapshot = {
         chainId: 84532,
         blockNumber: 100n,
@@ -87,8 +102,14 @@ export function fakeChain() {
       };
       snapshots.set(key, snapshot);
     }
-    return { ...snapshot, observedAtMs: Date.now(), blockTimestamp: state.chainTime };
+    return snapshot;
   }
+  const observed = (owner: Address, executor: Address) => ({
+    ...snapshotOf(owner, executor),
+    observedAtMs: Date.now(),
+    blockTimestamp: state.chainTime,
+  });
+
   const client = {
     getChainId: async () => 84532,
     simulateContract: async () => ({}),
@@ -100,7 +121,7 @@ export function fakeChain() {
       sent.push(serializedTransaction);
       if (state.failSend) throw new Error('RPC timeout after accepting transaction');
       const hash = keccak256(serializedTransaction);
-      if (!mempool.has(hash)) {
+      if (!mempool.has(hash) && !receipts.has(hash)) {
         mempool.set(hash, parseTransaction(serializedTransaction).to as Address);
         state.pendingNonce++;
       }
@@ -120,11 +141,61 @@ export function fakeChain() {
     getBlockNumber: async () => 104n,
   };
   const reader = {
-    manifest: { riskAdmin: randomAddress() },
+    manifest,
     confirmations: 5,
     client,
-    snapshot: async (owner: Address, executor: Address) => snapshotFor(owner, executor),
+    snapshot: async (owner: Address, executor: Address) => observed(owner, executor),
   } as unknown as BoundraChainReader;
+
+  /** Includes a pending signed executor call in a block and applies its effect. */
+  function mine(raw: Hex) {
+    const hash = keccak256(raw);
+    const tx = parseTransaction(raw);
+    const executor = tx.to as Address;
+    const { functionName, args } = decodeFunctionData({ abi: boundraExecutorAbi, data: tx.data! });
+    const [actionId, version, nonce, , target, amount] = args as readonly [
+      Hash,
+      bigint,
+      bigint,
+      bigint,
+      Address,
+      bigint,
+    ];
+    const s = snapshots.get(executor.toLowerCase())!;
+    const vault = target.toLowerCase() === liquid.toLowerCase() ? s.liquid : s.timed;
+    if (functionName === 'executeDeposit') {
+      s.idleBalance -= amount;
+      s.cumulativeDeposited += amount;
+      s.allocationCompleted = true;
+      vault.principal += amount;
+      vault.maxWithdraw = vault.principal;
+    } else {
+      vault.principal -= amount;
+      vault.maxWithdraw = vault.maxWithdraw > amount ? vault.maxWithdraw - amount : 0n;
+    }
+    s.nextActionNonce++;
+    mempool.delete(hash);
+    state.confirmedNonce++;
+    const topics = encodeEventTopics({
+      abi: boundraExecutorAbi,
+      eventName: 'ActionExecuted',
+      args: { actionId, version, target },
+    });
+    const data = encodeAbiParameters(
+      [{ type: 'uint256' }, { type: 'uint8' }, { type: 'uint256' }],
+      [nonce, functionName === 'executeDeposit' ? 1 : 2, amount],
+    );
+    receipts.set(hash, {
+      status: 'success',
+      to: executor,
+      from: account.address,
+      blockNumber: 100n,
+      blockHash,
+      transactionHash: hash,
+      logs: [{ address: executor, topics, data }],
+    } as unknown as TransactionReceipt);
+    return hash;
+  }
 
   function depositAction(actionId: Hash = randomHash()) {
     return {
@@ -146,6 +217,10 @@ export function fakeChain() {
     sent,
     receipts,
     mempool,
+    manifest,
+    token,
+    snapshotOf,
+    mine,
     depositAction,
     liquid,
     timed,

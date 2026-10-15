@@ -2,7 +2,12 @@ import { HttpStatus, Inject, Injectable } from '@nestjs/common';
 import { buildMandate, MandateBuildError, ONE_DAY } from '@boundra/acce';
 import { hashMandate } from '@boundra/chain';
 import { enqueueJob, type Mandate } from '@boundra/database';
-import { hashSchema, tokenAmountSchema, type MandateTuple } from '@boundra/shared';
+import {
+  hashSchema,
+  mandateTupleFromRow,
+  tokenAmountSchema,
+  type MandateTuple,
+} from '@boundra/shared';
 import { z } from 'zod';
 import { ApiError, invalidState, notFound } from '../common/errors';
 import { isUuid, parse, type AuthenticatedOwner } from '../common/request';
@@ -22,22 +27,7 @@ export const draftSchema = z
 export const approveSchema = z.object({ previewHash: hashSchema }).strict();
 export const authorizationCheckSchema = z.object({ txHash: hashSchema.optional() }).strict();
 
-export function tupleOf(row: Mandate): MandateTuple {
-  return {
-    chainId: 84532,
-    asset: row.asset,
-    operator: row.operator,
-    beneficiary: row.beneficiary,
-    expiresAt: row.expiresAt.toFixed(0),
-    allowedVaults: row.allowedVaults,
-    allowedActions: row.allowedActions,
-    maxLockupSeconds: row.maxLockupSeconds.toString(),
-    maxDepositPerAction: row.maxDepositPerAction.toFixed(0),
-    maxCumulativeDeposits: row.maxCumulativeDeposits.toFixed(0),
-    maxWithdrawPerAction: row.maxWithdrawPerAction.toFixed(0),
-    allocationTarget: row.allocationTarget.toFixed(0),
-  };
-}
+export const tupleOf = (row: Mandate): MandateTuple => mandateTupleFromRow(row);
 
 const ACTIVE_DRAFT = ['DRAFT', 'PREVIEWED', 'APPROVED'] as const;
 

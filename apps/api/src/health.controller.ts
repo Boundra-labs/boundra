@@ -30,11 +30,12 @@ export class HealthController {
       ) {
         throw new Error('Worker unavailable');
       }
+      // Reports the worker's own activation result; only 'execute' may sign transactions.
       return {
         status: 'ok',
         database: 'connected',
-        worker: 'observe_only',
-        executionEnabled: false,
+        worker: heartbeat.mode,
+        executionEnabled: heartbeat.mode === 'execute',
       };
     } catch {
       throw new ServiceUnavailableException({

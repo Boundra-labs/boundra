@@ -83,6 +83,40 @@ export const mandateTupleSchema = z
   })
   .strict();
 
+interface ExactInteger {
+  toFixed(digits: number): string;
+}
+/** Persisted mandate columns (Prisma Decimal/BigInt) as the wire tuple. */
+export interface MandateRow {
+  asset: string;
+  operator: string;
+  beneficiary: string;
+  expiresAt: ExactInteger;
+  allowedVaults: number;
+  allowedActions: number;
+  maxLockupSeconds: bigint;
+  maxDepositPerAction: ExactInteger;
+  maxCumulativeDeposits: ExactInteger;
+  maxWithdrawPerAction: ExactInteger;
+  allocationTarget: ExactInteger;
+}
+export function mandateTupleFromRow(row: MandateRow): MandateTuple {
+  return mandateTupleSchema.parse({
+    chainId: BASE_SEPOLIA_CHAIN_ID,
+    asset: row.asset,
+    operator: row.operator,
+    beneficiary: row.beneficiary,
+    expiresAt: row.expiresAt.toFixed(0),
+    allowedVaults: row.allowedVaults,
+    allowedActions: row.allowedActions,
+    maxLockupSeconds: row.maxLockupSeconds.toString(),
+    maxDepositPerAction: row.maxDepositPerAction.toFixed(0),
+    maxCumulativeDeposits: row.maxCumulativeDeposits.toFixed(0),
+    maxWithdrawPerAction: row.maxWithdrawPerAction.toFixed(0),
+    allocationTarget: row.allocationTarget.toFixed(0),
+  });
+}
+
 export const answerSchema = z
   .object({ questionId: z.string().min(1).max(100), alternativeId: z.string().min(1).max(64) })
   .strict();

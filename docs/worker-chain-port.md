@@ -4,7 +4,15 @@
 
 `apps/worker/src/chain/execution.ts` implements `OperatorExecutionService` with confirmed snapshot checks, latest-state simulation, gas/fee caps, offline restricted-operator signing, persistence-before-broadcast, canonical receipt/event verification, and identical-transaction crash recovery.
 
-It is deliberately **not registered** in the heartbeat-only WorkerModule. Person 2 wires scheduling/lifecycle after providing the PostgreSQL store below. There is no in-memory production fallback. Test fixtures use isolated in-memory stores only to exercise the port contract.
+Person 2's PostgreSQL implementations live in `apps/worker/src/persistence/` (`PostgresExecutionStore`, `PostgresMonitorStore`) and are wired by `apps/worker/src/runtime/worker.runtime.ts`. The worker starts in one of three modes chosen by `runtime/activation.ts`:
+
+| Mode           | When                                                                                                                                  | Behaviour                                                                     |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `observe_only` | No `DEPLOYMENT_MANIFEST_PATH`, or activation failed (RPC down, untrusted bytecode)                                                    | Heartbeat only; activation is retried periodically, never a restart loop      |
+| `monitor_only` | Manifest verified, but `EXECUTION_ENABLED`, operator key, `ATTEMPT_ENCRYPTION_KEY` or gas caps missing, or operator equals risk admin | Verifies authorizations, monitors risk events, records decisions; never signs |
+| `execute`      | All of the above present                                                                                                              | Additionally proposes, signs and reconciles bounded operator actions          |
+
+The heartbeat records the mode and API readiness reports `executionEnabled` only for `execute`. There is no in-memory production fallback.
 
 ## ExecutionStore contract
 

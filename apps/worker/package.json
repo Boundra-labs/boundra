@@ -12,7 +12,7 @@
     "health": "node --env-file-if-exists=../../.env dist/health.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "tsx --test tests/*.test.ts",
-    "test:integration": "tsx --env-file-if-exists=../../.env --test tests/*.integration.ts"
+    "test:integration": "tsx --env-file-if-exists=../../.env --test --test-concurrency=1 tests/*.integration.ts"
   },
   "dependencies": {
     "@boundra/database": "workspace:*",

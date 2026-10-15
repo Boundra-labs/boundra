@@ -9,7 +9,7 @@ Rencana lengkap: [person-2-plan.md](./person-2-plan.md). Setiap fase berakhir de
 | 2    | Lease, job queue, `ExecutionStore`, `MonitorStore` (WS2)    | ✅ Selesai |
 | 3    | ACCE engine & mandate builder (WS5, WS6 bagian murni)       | ✅ Selesai |
 | 4    | Auth SIWE & API (WS3, WS4, WS6 bagian API)                  | ✅ Selesai |
-| 5    | Verifikasi otorisasi/funding & orkestrasi worker (WS6, WS7) | ⏳ Belum   |
+| 5    | Verifikasi otorisasi/funding & orkestrasi worker (WS6, WS7) | ✅ Selesai |
 | 6    | E2E chain lokal (anvil)                                     | ⏳ Belum   |
 | 7    | Provider LLM (WS8)                                          | ⏳ Belum   |
 | 8    | Benchmark runner (WS9)                                      | ⏳ Belum   |
@@ -102,3 +102,25 @@ Kriteria:
 - [x] Rate limit login aktif tanpa membatasi route lain.
 - [x] API berjalan dari build (`node dist/main.js`) dan dari jalur dev (`tsx`); OpenAPI memuat 18 route.
 - [x] Tes: API integrasi 18/18 + unit 4/4, chain 10/10, Foundry 32/32, ACCE 19/19, shared 8/8, worker 11/11 + 17/17, DB 5/5; typecheck semua paket, lint dan format bersih.
+
+## Fase 5 — Verifikasi otorisasi & orkestrasi worker
+
+- `orchestration/decision.ts`: kebijakan agent deterministik (`decide`, `mandateStatus`) sesuai PRD §7.2/§13.1: deposit sekali ke vault terpilih bila dana cukup dan vault NORMAL; DEGRADED → withdraw `min(principal, kapasitas, cap)`; terkunci/kapasitas nol/tanpa izin withdraw → ESCALATE; ESCALATE memblokir deposit baru tetapi tidak recovery; pause → HOLD; revoke/expiry/penggantian on-chain → status mandat berubah, tanpa aksi.
+- `orchestration/orchestrator.ts`: `verifyAuthorization` (AUTHORIZED hanya bila tuple on-chain terkonfirmasi sama persis dengan yang di-approve dan versinya belum pernah dipakai), `evaluateMandate` (satu aksi non-terminal per executor, decision log dideduplikasi, `actionId` deterministik sehingga worker paralel bertabrakan di unique constraint, `prepareAction` sebelum proposal, policy check tersimpan), `executeAction` (lewat `OperatorExecutionService`; penolakan sebelum tanda tangan → REJECTED, kegagalan setelah tanda tangan → tetap RECONCILE), `fanOutRisk`, `schedule` (ticker idempotent berbasis bucket).
+- `orchestration/job-runner.ts` dan `runtime/`: gate aktivasi tiga mode (`observe_only`, `monitor_only`, `execute`), job runner dengan backoff, shutdown tertib, heartbeat yang melaporkan mode; readiness API kini menampilkan mode worker sebenarnya.
+
+Kriteria:
+
+- [x] FR-05: AUTHORIZED hanya setelah mandat on-chain sama persis; tuple berbeda tetap PENDING; idempotent.
+- [x] T04: mandat terotorisasi dan terdanai → proposal deposit, policy check lulus, broadcast, CONFIRMED dari receipt; evaluasi berkala tidak deposit ulang.
+- [x] T05: risk event kanonik → evaluasi ulang → withdraw sebatas kapasitas → CONFIRMED; sisa posisi tanpa kapasitas → ESCALATE.
+- [x] T06: posisi terkunci saat DEGRADED → ESCALATE, tanpa transaksi.
+- [x] T09/T16: revoke dan penggantian mandat on-chain menghentikan agent.
+- [x] T15: dana belum masuk → HOLD (dicatat sekali); pause → HOLD.
+- [x] Pause setelah proposal ditegakkan saat dispatch: REJECTED, tidak ada tanda tangan, slot executor bebas.
+- [x] Tiga worker mengevaluasi bersamaan → tepat satu proposal; job eksekusi berulang → satu broadcast.
+- [x] Mode monitor-only tidak pernah mengusulkan transaksi.
+- [x] Worker nyata: tanpa manifest → `observe_only`; manifest rusak → aktivasi gagal, tetap hidup, dicoba ulang, tanpa restart loop; heartbeat melaporkan mode.
+- [x] Tes: worker unit 18/18, integrasi worker 26/26 (dua kali berturut-turut), API 4/4 + 18/18, shared 8/8, ACCE 19/19; typecheck semua paket, lint dan format bersih.
+
+Catatan: tes integrasi worker kini dijalankan serial (`--test-concurrency=1`) karena berbagi antrean job PostgreSQL yang sama.
