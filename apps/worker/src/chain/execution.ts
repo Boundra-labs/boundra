@@ -1,4 +1,5 @@
 import {
+  encodeFunctionData,
   getAddress,
   keccak256,
   parseEventLogs,
@@ -65,6 +66,23 @@ export interface ExecutionLimits {
   maxPriorityFeePerGas: bigint;
 }
 const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+const MAX_BROADCASTS = 3;
+// Persisted total including normal sends; extra sends only release an expired attempt's nonce.
+const MAX_RELEASE_BROADCASTS = 6;
+const BROADCAST_INTERVAL_MS = 10_000;
+
+function encodeAction(action: ActionRequest): Hex {
+  const args = [
+    action.actionId as Hex,
+    BigInt(action.mandateVersion),
+    BigInt(action.nonce),
+    BigInt(action.deadline),
+    action.target as Address,
+    BigInt(action.amount),
+  ] as const;
+  const functionName = action.kind === 'DEPOSIT' ? 'executeDeposit' : 'executeWithdraw';
+  return encodeFunctionData({ abi: boundraExecutorAbi, functionName, args });
+}
 
 /** Not registered in WorkerModule until Person 2 supplies the durable store and lifecycle wiring. */
 export class OperatorExecutionService {
@@ -291,9 +309,21 @@ export class OperatorExecutionService {
     return 'CONFIRMED';
   }
 
-  private async broadcast(attempt: SignedAttempt, lease: SignerLease): Promise<AttemptState> {
+  private async broadcast(
+    attempt: SignedAttempt,
+    lease: SignerLease,
+    maxAttempts = MAX_BROADCASTS,
+    code?: string,
+  ): Promise<AttemptState> {
     await lease.assertHeld();
-    if (!(await this.store.reserveBroadcast(attempt.actionId, 3, 10_000, lease))) {
+    if (
+      !(await this.store.reserveBroadcast(
+        attempt.actionId,
+        maxAttempts,
+        BROADCAST_INTERVAL_MS,
+        lease,
+      ))
+    ) {
       await this.store.recordState(
         attempt.actionId,
         'RECONCILE',
@@ -308,7 +338,7 @@ export class OperatorExecutionService {
         serializedTransaction: attempt.rawTransaction,
       });
       if (hash !== attempt.transactionHash) throw new Error('Unexpected broadcast hash');
-      await this.store.recordState(attempt.actionId, 'BROADCAST', {}, lease);
+      await this.store.recordState(attempt.actionId, 'BROADCAST', code ? { code } : {}, lease);
       return 'BROADCAST';
     } catch {
       await this.store.recordState(
@@ -353,8 +383,6 @@ export class OperatorExecutionService {
         if (confirmedNonce <= attempt.eoaNonce && pendingNonce === attempt.eoaNonce) {
           // Recover crash-after-persist or a dropped tx by replaying identical signed bytes only.
           // Do not allocate a fresh EOA nonce/action ID or silently change fees/calldata.
-          const current = await this.reader.snapshot(attempt.owner, attempt.executor);
-          const call = prepareAction(current, attempt.action, this.account.address);
           const signed = parseTransaction(attempt.rawTransaction);
           if (
             keccak256(attempt.rawTransaction) !== attempt.transactionHash ||
@@ -362,7 +390,7 @@ export class OperatorExecutionService {
             signed.nonce !== attempt.eoaNonce ||
             !signed.to ||
             !same(signed.to, attempt.executor) ||
-            signed.data !== call.data ||
+            signed.data !== encodeAction(attempt.action) ||
             (signed.value ?? 0n) !== 0n ||
             !signed.gas ||
             signed.gas > this.limits.maxGas ||
@@ -372,14 +400,38 @@ export class OperatorExecutionService {
             signed.maxPriorityFeePerGas > this.limits.maxPriorityFeePerGas
           )
             throw new ChainPolicyError('SIGNED_ATTEMPT_MISMATCH');
-          await this.reader.client.simulateContract({
-            address: call.address,
-            abi: call.abi,
-            functionName: call.functionName,
-            args: call.args,
-            account: this.account.address,
-            blockTag: 'pending',
-          });
+          if (await this.deadlineElapsed(attempt)) {
+            // The executor rejects deadline <= block.timestamp, so these bytes can only revert.
+            // Mining that revert consumes the reserved EOA nonce instead of leaving a permanent gap.
+            return this.broadcast(
+              attempt,
+              lease,
+              MAX_RELEASE_BROADCASTS,
+              'NONCE_RELEASE_BROADCAST',
+            );
+          }
+          try {
+            const current = await this.reader.snapshot(attempt.owner, attempt.executor);
+            const call = prepareAction(current, attempt.action, this.account.address);
+            await this.reader.client.simulateContract({
+              address: call.address,
+              abi: call.abi,
+              functionName: call.functionName,
+              args: call.args,
+              account: this.account.address,
+              blockTag: 'pending',
+            });
+          } catch {
+            // Pause, risk or state changes must not be overridden by an old candidate.
+            // Hold the nonce until the deadline makes a release broadcast safe.
+            await this.store.recordState(
+              attempt.actionId,
+              'RECONCILE',
+              { code: 'RESEND_BLOCKED_UNTIL_DEADLINE' },
+              lease,
+            );
+            return 'RECONCILE';
+          }
           return this.broadcast(attempt, lease);
         }
       }
@@ -391,5 +443,14 @@ export class OperatorExecutionService {
       lease,
     );
     return 'RECONCILE';
+  }
+
+  private async deadlineElapsed(attempt: SignedAttempt): Promise<boolean> {
+    // Use a confirmed block: later canonical blocks cannot carry an earlier timestamp.
+    const head = await this.reader.client.getBlockNumber({ cacheTime: 0 });
+    const depth = BigInt(this.reader.confirmations - 1);
+    if (head < depth) return false;
+    const block = await this.reader.client.getBlock({ blockNumber: head - depth });
+    return BigInt(attempt.action.deadline) <= block.timestamp;
   }
 }
