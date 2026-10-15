@@ -13,7 +13,7 @@ Rencana lengkap: [person-2-plan.md](./person-2-plan.md). Setiap fase berakhir de
 | 6    | E2E chain lokal (anvil)                                     | ✅ Selesai |
 | 7    | Provider LLM (WS8)                                          | ✅ Selesai |
 | 8    | Benchmark runner (WS9)                                      | ✅ Selesai |
-| 9    | Dokumentasi, CI, PR                                         | ⏳ Belum   |
+| 9    | Dokumentasi, CI, PR                                         | ✅ Selesai |
 
 ## Fase 0 — Rencana & baseline
 
@@ -188,3 +188,23 @@ Kriteria:
 - [x] Tes: `evaluation` 8/8; lint dan format bersih.
 
 **Pending (jujur):** fixture 50 persona (20 development / 30 held-out) adalah milik Person 3 dan belum ada, jadi **belum ada hasil benchmark yang diklaim**. `fixtures/example-prd-personas.json` hanya contoh untuk menjalankan runner.
+
+## Fase 9 — Dokumentasi, CI dan verifikasi akhir
+
+- Dokumen Person 2: [api.md](./api.md), [acce.md](./acce.md), [data-model.md](./data-model.md) dan kontrak [openapi.json](./openapi.json) (diekspor dari aplikasi, `pnpm --filter @boundra/api openapi:export`). README dan [runbook](./runbook.md) diperbarui (status, mode worker, pemulihan, perintah tes baru).
+- CI menjalankan `pnpm test:e2e:chain` setelah tes integrasi.
+- Verifikasi akhir dengan toolchain CI (Node 22.22.0 resmi, checksum diverifikasi; pnpm 10.32.1):
+  - `pnpm check`: lint, typecheck semua paket, tes unit (Foundry 32, shared 8, ACCE 19, LLM 12, evaluation 8, chain 10, worker 18, API 4) dan build produksi (termasuk web) — lulus.
+  - `pnpm test:integration`: database 5, worker 26, API 19 — lulus.
+  - `pnpm test:e2e:chain`: alur penuh di anvil — lulus.
+  - Playwright web tidak dijalankan ulang karena `apps/web` tidak diubah.
+
+## Ringkasan yang masih terbuka (bukan bagian kode Person 2 yang bisa diselesaikan sendiri)
+
+| Item                                                                  | Pemilik             | Kebutuhan                                       |
+| --------------------------------------------------------------------- | ------------------- | ----------------------------------------------- |
+| Deploy Base Sepolia, manifest publik, receipt deposit/withdraw publik | Person 1            | Kunci deployer/operator runtime dan gas testnet |
+| Run provider LLM nyata yang tercatat                                  | Person 2            | `LLM_API_KEY` runtime                           |
+| Fixture 50 persona beku (20 dev / 30 held-out) dan run benchmark      | Person 3 → Person 2 | Fixture dari Person 3                           |
+| UI intent/ACCE/preview/funding/dashboard di atas API ini              | Person 3            | `docs/api.md`, `docs/openapi.json`              |
+| HTTPS, backup/restore drill, monitoring, soak test 60 menit           | Person 3 (+1/2)     | Host dan domain                                 |

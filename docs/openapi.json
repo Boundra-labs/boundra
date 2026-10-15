@@ -1,0 +1,599 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/api/v1/health/live": {
+      "get": {
+        "operationId": "HealthController_live",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Process liveness; does not claim chain readiness",
+        "tags": ["health"]
+      }
+    },
+    "/api/v1/health/ready": {
+      "get": {
+        "operationId": "HealthController_ready",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Checks PostgreSQL schema and worker heartbeat",
+        "tags": ["health"]
+      }
+    },
+    "/api/v1/auth/challenge": {
+      "post": {
+        "operationId": "AuthController_challenge",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "address": {
+                    "type": "string",
+                    "pattern": "^0x[0-9a-fA-F]{40}$"
+                  }
+                },
+                "required": ["address"],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Issue a single-use SIWE (EIP-4361) challenge for an EOA",
+        "tags": ["auth"]
+      }
+    },
+    "/api/v1/auth/verify": {
+      "post": {
+        "operationId": "AuthController_verify",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "message": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  },
+                  "signature": {
+                    "type": "string",
+                    "pattern": "^0x[0-9a-fA-F]{130}$"
+                  }
+                },
+                "required": ["message", "signature"],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Verify a signed challenge and start a session (not a mandate approval)",
+        "tags": ["auth"]
+      }
+    },
+    "/api/v1/auth/session": {
+      "get": {
+        "operationId": "AuthController_session",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "__Host-boundra_session": []
+          }
+        ],
+        "summary": "Current session and its CSRF token",
+        "tags": ["auth"]
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "operationId": "AuthController_logout",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "__Host-boundra_session": []
+          }
+        ],
+        "tags": ["auth"]
+      }
+    },
+    "/api/v1/intents": {
+      "post": {
+        "operationId": "IntentsController_create",
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Required for POST requests",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "objective": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  },
+                  "amount": {
+                    "type": "string"
+                  },
+                  "chainId": {
+                    "type": "number",
+                    "const": 84532
+                  }
+                },
+                "required": ["objective", "amount", "chainId"],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "__Host-boundra_session": []
+          }
+        ],
+        "summary": "Create an intent; returns the first clarification question if one is material",
+        "tags": ["intents"]
+      }
+    },
+    "/api/v1/intents/{id}": {
+      "get": {
+        "operationId": "IntentsController_get",
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Required for POST requests",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "__Host-boundra_session": []
+          }
+        ],
+        "summary": "Intent state, active question, eligible candidates and reasons",
+        "tags": ["intents"]
+      }
+    },
+    "/api/v1/intents/{id}/answers": {
+      "post": {
+        "operationId": "IntentsController_answer",
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Required for POST requests",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "questionId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "alternativeId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  }
+                },
+                "required": ["questionId", "alternativeId"],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "__Host-boundra_session": []
+          }
+        ],
+        "summary": "Answer the active question; candidates and next question are recomputed",
+        "tags": ["intents"]
+      }
+    },
+    "/api/v1/intents/{id}/mandate-drafts": {
+      "post": {
+        "operationId": "MandatesController_create",
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Required for POST/PATCH requests",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "expiryDays": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 60
+                  },
+                  "maxDepositPerAction": {
+                    "type": "string"
+                  },
+                  "maxWithdrawPerAction": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "__Host-boundra_session": []
+          }
+        ],
+        "summary": "Draft a mandate revision with its structured preview",
+        "tags": ["mandates"]
+      }
+    },
+    "/api/v1/mandate-drafts/{id}": {
+      "get": {
+        "operationId": "MandatesController_get",
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Required for POST/PATCH requests",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "__Host-boundra_session": []
+          }
+        ],
+        "summary": "Mandate revision, preview, preview hash and status",
+        "tags": ["mandates"]
+      },
+      "patch": {
+        "operationId": "MandatesController_revise",
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Required for POST/PATCH requests",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "expiryDays": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 60
+                  },
+                  "maxDepositPerAction": {
+                    "type": "string"
+                  },
+                  "maxWithdrawPerAction": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "__Host-boundra_session": []
+          }
+        ],
+        "summary": "Edit limits; creates a new revision that must be reviewed again",
+        "tags": ["mandates"]
+      }
+    },
+    "/api/v1/mandate-drafts/{id}/approve": {
+      "post": {
+        "operationId": "MandatesController_approve",
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Required for POST/PATCH requests",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "previewHash": {
+                    "type": "string",
+                    "pattern": "^0x[0-9a-fA-F]{64}$"
+                  }
+                },
+                "required": ["previewHash"],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "__Host-boundra_session": []
+          }
+        ],
+        "summary": "Approve the exact previewed revision; returns the owner transactions to send",
+        "tags": ["mandates"]
+      }
+    },
+    "/api/v1/mandate-drafts/{id}/authorization-check": {
+      "post": {
+        "operationId": "MandatesController_check",
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Required for POST/PATCH requests",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "txHash": {
+                    "type": "string",
+                    "pattern": "^0x[0-9a-fA-F]{64}$"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "__Host-boundra_session": []
+          }
+        ],
+        "summary": "Queue on-chain verification of setMandate and funding",
+        "tags": ["mandates"]
+      }
+    },
+    "/api/v1/config/public": {
+      "get": {
+        "operationId": "AccountController_publicConfig",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Reviewed chain configuration and vault descriptors (no secrets)",
+        "tags": ["account"]
+      }
+    },
+    "/api/v1/executors/register": {
+      "post": {
+        "operationId": "AccountController_registerExecutor",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "__Host-boundra_session": []
+          }
+        ],
+        "summary": "Register the executor the trusted factory created for your wallet",
+        "tags": ["account"]
+      }
+    },
+    "/api/v1/dashboard": {
+      "get": {
+        "operationId": "AccountController_dashboard",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "__Host-boundra_session": []
+          }
+        ],
+        "summary": "Mandate status and confirmed on-chain balances/positions",
+        "tags": ["account"]
+      }
+    },
+    "/api/v1/activity": {
+      "get": {
+        "operationId": "AccountController_activity",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "__Host-boundra_session": []
+          }
+        ],
+        "summary": "Owner activity timeline, newest first; HOLD and denials carry no tx hash",
+        "tags": ["account"]
+      }
+    },
+    "/api/v1/admin/demo/reset": {
+      "post": {
+        "operationId": "AccountController_reset",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "__Host-boundra_session": []
+          }
+        ],
+        "summary": "Demo admin: close an owner’s open synthetic drafts; never touches chain evidence",
+        "tags": ["account"]
+      }
+    }
+  },
+  "info": {
+    "title": "Boundra API",
+    "description": "Base Sepolia testnet prototype. Session cookie auth via SIWE; state-changing requests need X-CSRF-Token and an allowed Origin. Amounts are base-unit strings.",
+    "version": "0.2.0",
+    "contact": {}
+  },
+  "tags": [],
+  "servers": [],
+  "components": {
+    "securitySchemes": {
+      "cookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "__Host-boundra_session"
+      }
+    },
+    "schemas": {}
+  }
+}

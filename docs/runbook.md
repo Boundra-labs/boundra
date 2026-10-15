@@ -7,7 +7,17 @@
 3. Run `pnpm db:up`, wait for PostgreSQL health, then `pnpm db:migrate`.
 4. Run `pnpm dev`. API, worker and web start separately.
 
-`/api/v1/health/live` proves API process liveness. `/api/v1/health/ready` requires migrated PostgreSQL and a recent worker heartbeat. Neither endpoint proves contract deployment or execution readiness. The scaffold cannot sign transactions.
+`/api/v1/health/live` proves API process liveness. `/api/v1/health/ready` requires migrated PostgreSQL and a recent worker heartbeat and reports the worker mode; `executionEnabled` is true only in `execute` mode. Neither endpoint proves public deployment.
+
+## Worker modes
+
+| Mode           | Cause                                                                                                                                                                                                | Action                                                                         |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `observe_only` | `DEPLOYMENT_MANIFEST_PATH` unset, or activation failed (RPC down, bytecode/config mismatch)                                                                                                          | Fix the manifest/RPC; activation is retried every few ticks, no restart needed |
+| `monitor_only` | Signing not fully configured (`EXECUTION_ENABLED`, `OPERATOR_PRIVATE_KEY`, `ATTEMPT_ENCRYPTION_KEY`, `MAX_GAS`, `MAX_FEE_PER_GAS_WEI`, `MAX_PRIORITY_FEE_PER_GAS_WEI`) or operator equals risk admin | Intended until the release gates pass                                          |
+| `execute`      | All checks passed                                                                                                                                                                                    | Agent proposes, signs and reconciles bounded actions                           |
+
+Stuck actions stay `RECONCILE` and are retried automatically; an operator EOA nonce blocked by an unsendable attempt is released after the action deadline (`ACTION_DEADLINE_SECONDS`) by a guaranteed-revert rebroadcast. Investigate `ActionProposal`/`TransactionAttempt`/`AttemptEvent` rows before any manual action; never create a replacement action ID. On suspected operator compromise: owners revoke on-chain, set `EXECUTION_ENABLED=false`, rotate the key, and authorize a new operator only through fresh mandates.
 
 ## Diagnose
 
