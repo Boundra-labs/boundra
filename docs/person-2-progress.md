@@ -10,7 +10,7 @@ Rencana lengkap: [person-2-plan.md](./person-2-plan.md). Setiap fase berakhir de
 | 3    | ACCE engine & mandate builder (WS5, WS6 bagian murni)       | ✅ Selesai |
 | 4    | Auth SIWE & API (WS3, WS4, WS6 bagian API)                  | ✅ Selesai |
 | 5    | Verifikasi otorisasi/funding & orkestrasi worker (WS6, WS7) | ✅ Selesai |
-| 6    | E2E chain lokal (anvil)                                     | ⏳ Belum   |
+| 6    | E2E chain lokal (anvil)                                     | ✅ Selesai |
 | 7    | Provider LLM (WS8)                                          | ⏳ Belum   |
 | 8    | Benchmark runner (WS9)                                      | ⏳ Belum   |
 | 9    | Dokumentasi, CI, PR                                         | ⏳ Belum   |
@@ -124,3 +124,25 @@ Kriteria:
 - [x] Tes: worker unit 18/18, integrasi worker 26/26 (dua kali berturut-turut), API 4/4 + 18/18, shared 8/8, ACCE 19/19; typecheck semua paket, lint dan format bersih.
 
 Catatan: tes integrasi worker kini dijalankan serial (`--test-concurrency=1`) karena berbagi antrean job PostgreSQL yang sama.
+
+## Fase 6 — E2E chain lokal (anvil)
+
+`pnpm test:e2e:chain` (`apps/worker/tests/e2e/full-flow.e2e.ts`) menjalankan seluruh sistem di atas kontrak asli:
+
+1. `anvil --chain-id 84532` (`@foundry-rs/anvil` 1.7.1, versi sama dengan forge), deploy dengan **script deploy Person 1** (artefak broadcast/cache diarahkan ke folder sementara agar tidak menimpa log deploy publik), manifest dengan code hash dari bytecode yang benar-benar ter-deploy.
+2. Database PostgreSQL baru yang dimigrasikan dari nol dan dihapus di akhir.
+3. API asli lewat HTTP (SIWE, intent, ACCE, register executor, draft, approve) dan worker asli lewat gate aktivasi (`execute`).
+4. Wallet owner sendiri menandatangani `claim`, `createExecutor`, `setMandate`, `approve`, `fund`, `revoke`, `ownerWithdraw`; risk admin sendiri menandatangani `setRiskState`.
+
+Kriteria:
+
+- [x] T04: otorisasi diverifikasi on-chain, agent deposit 300 MockUSDC tanpa tanda tangan owner tambahan; receipt sukses dari operator; tx hash di activity sama dengan receipt.
+- [x] T07/T08/T10/T11: kontrak menolak deposit kedua (`BudgetExceeded`), target tidak diizinkan (`TargetNotAllowed`), replay action ID (`Replay`), pemanggil bukan operator (`OperatorOnly`), dan operator mengubah mandat (`OwnerOnly`).
+- [x] T05: `setRiskState(DEGRADED, 200)` → monitor → withdraw 200 MockUSDC langsung ke wallet owner; sisa 100 tanpa kapasitas → ESCALATE.
+- [x] T12 di chain nyata: dispatch pertama crash setelah attempt ditandatangani dan disimpan (`sendCount` 0); worker berikutnya mengirim **byte identik** (tx hash sama), satu reservasi nonce.
+- [x] T09/T16: revoke → mandat REVOKED, operator ditolak (`InactiveMandate`); recovery owner mengikuti kapasitas vault (`InsufficientCapacity` lalu berhasil setelah kapasitas pulih); owner kembali memegang 1.000 MockUSDC; tepat dua transaksi agent.
+- [x] Lulus dua kali berturut-turut (±40 detik); tidak ada proses anvil maupun database e2e yang tertinggal.
+- [x] `createReadOnlyChainClient` kini memakai multicall _deployless_ (tidak bergantung pada Multicall3 yang ter-deploy), diverifikasi ulang di Base Sepolia publik.
+- [x] Typecheck worker kini mencakup tes (`tsconfig.e2e.json`); satu kesalahan tipe lama di `execution.test.ts` diperbaiki.
+
+Batas klaim: ini bukti lokal di anvil, bukan transaksi publik Base Sepolia. Bukti publik tetap menunggu deploy Person 1 dan kunci runtime.

@@ -10,9 +10,10 @@
     "build": "tsc -p tsconfig.json",
     "start": "node --env-file-if-exists=../../.env dist/main.js",
     "health": "node --env-file-if-exists=../../.env dist/health.js",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.e2e.json",
     "test": "tsx --test tests/*.test.ts",
-    "test:integration": "tsx --env-file-if-exists=../../.env --test --test-concurrency=1 tests/*.integration.ts"
+    "test:integration": "tsx --env-file-if-exists=../../.env --test --test-concurrency=1 tests/*.integration.ts",
+    "test:e2e:chain": "tsx --tsconfig tsconfig.e2e.json --env-file-if-exists=../../.env --test --test-timeout=400000 tests/e2e/*.e2e.ts"
   },
   "dependencies": {
     "@boundra/database": "workspace:*",

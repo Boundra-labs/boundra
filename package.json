@@ -19,6 +19,7 @@
     "test": "pnpm build:packages && pnpm -r --if-present test",
     "test:integration": "pnpm -r --if-present test:integration",
     "test:e2e": "playwright test",
+    "test:e2e:chain": "pnpm --filter @boundra/worker test:e2e:chain",
     "contracts:build": "pnpm --filter @boundra/contracts build",
     "contracts:test": "pnpm --filter @boundra/contracts test",
     "db:up": "docker compose up -d postgres",

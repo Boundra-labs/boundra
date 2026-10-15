@@ -226,7 +226,10 @@ test('confirms only a matching canonical execution event and detects a later reo
     logs: [{ address: addr(3), topics, data }],
   } as unknown as TransactionReceipt);
   assert.equal(await f.service.execute(addr(2), addr(3), f.action), 'CONFIRMED');
-  f.client.getBlock = async () => ({ hash: toHex(99n, { size: 32 }) });
+  f.client.getBlock = async () => ({
+    hash: toHex(99n, { size: 32 }),
+    timestamp: f.snapshot.blockTimestamp,
+  });
   assert.equal(await f.service.execute(addr(2), addr(3), f.action), 'RECONCILE');
   assert.equal(f.count().broadcasts, 1);
 });

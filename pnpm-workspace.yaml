@@ -12,6 +12,7 @@ onlyBuiltDependencies:
   - sharp
   - unrs-resolver
 ignoredBuiltDependencies:
-  # The native optional package is used directly by bin.mjs. Upstream's fallback
+  # The native optional packages are used directly by bin.mjs. Upstream's fallback
   # postinstall uses POSIX env syntax and fails under Windows cmd.exe.
   - '@foundry-rs/forge'
+  - '@foundry-rs/anvil'
