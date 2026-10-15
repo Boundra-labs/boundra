@@ -152,5 +152,5 @@ export function prepareAction(
     functionName,
     args,
     data: encodeFunctionData({ abi: boundraExecutorAbi, functionName, args }),
-  };
+  } as const;
 }
