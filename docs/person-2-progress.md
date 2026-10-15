@@ -12,7 +12,7 @@ Rencana lengkap: [person-2-plan.md](./person-2-plan.md). Setiap fase berakhir de
 | 5    | Verifikasi otorisasi/funding & orkestrasi worker (WS6, WS7) | ✅ Selesai |
 | 6    | E2E chain lokal (anvil)                                     | ✅ Selesai |
 | 7    | Provider LLM (WS8)                                          | ✅ Selesai |
-| 8    | Benchmark runner (WS9)                                      | ⏳ Belum   |
+| 8    | Benchmark runner (WS9)                                      | ✅ Selesai |
 | 9    | Dokumentasi, CI, PR                                         | ⏳ Belum   |
 
 ## Fase 0 — Rencana & baseline
@@ -166,3 +166,25 @@ Kriteria:
 - [x] Tes: `packages/llm` 12/12, ACCE 19/19, API 4/4 + 19/19, E2E anvil 1/1; typecheck, lint dan format bersih.
 
 **Pending (jujur):** belum ada `LLM_API_KEY` di lingkungan ini, jadi belum ada run provider nyata yang tercatat. Semua jalur diuji dengan klien SDK fake. Klaim "generative AI" untuk demo/benchmark membutuhkan run dengan key runtime (PRD §13.2).
+
+## Fase 8 — Benchmark runner B0–B3
+
+Workspace baru `evaluation/` (`@boundra/evaluation`), detail di [evaluation/README.md](../evaluation/README.md):
+
+- `src/fixtures.ts`: schema fixture persona (prompt/nominal publik, preferensi non-negotiable tersembunyi, label kasus, `acceptableActions`, split development/held-out, flag `frozen`).
+- `src/runner/simulator.ts`: satu-satunya modul yang membaca label tersembunyi (jawaban persona, persetujuan pada konfirmasi, evaluasi mismatch). Aturan ESLint menolak import simulator/runner/tipe tersembunyi dari `src/baselines/` (dibuktikan dengan percobaan import yang gagal lint).
+- `src/baselines/methods.ts`: B0/B1 one-shot (provider LLM, atau `heuristic-stub` berlabel bila tidak ada provider), B2 lima pertanyaan tetap, B3 ACCE; semua memakai mandate builder yang sama.
+- `src/runner/run.ts` dan `report.ts`: metrik draft vs approved mismatch, completion, aksi yang dapat diterima, false refusal, tanpa mandat, jumlah pertanyaan (mean/median/max), latensi, token; setiap denominator dilaporkan; laporan JSON + Markdown memuat versi fixture (sha256), config ACCE, deskriptor, prompt dan provider.
+- CLI `pnpm benchmark -- --fixture … --split … [--persist]`; `--persist` menyimpan `EvaluationRun`/`EvaluationCaseResult`. Held-out ditolak sampai fixture `frozen`.
+
+Kriteria:
+
+- [x] Simulator menjawab hanya dari preferensi tersembunyi; evaluator mendeteksi pelanggaran lockup/likuiditas/vault/nominal.
+- [x] B3 pada persona PRD: A 1 pertanyaan → LiquidVault, B 2 pertanyaan → TimedVault, C "tidak yakin" → LiquidVault, D deskripsi menyesatkan → LiquidVault; tanpa mismatch.
+- [x] B2 selalu 5 pertanyaan; B0 mempertahankan draft yang salah, B1 menolaknya di konfirmasi dan menghitungnya sebagai false refusal.
+- [x] Tanpa provider, B0/B1 diberi label `heuristic-stub` dan laporan menyatakan bukan hasil AI.
+- [x] Held-out hanya pada fixture beku; fixture dengan ID ganda ditolak; denominator nol dilaporkan `null`, bukan 0%.
+- [x] CLI menulis laporan dan `--persist` tersimpan di PostgreSQL (diverifikasi lalu dibersihkan).
+- [x] Tes: `evaluation` 8/8; lint dan format bersih.
+
+**Pending (jujur):** fixture 50 persona (20 development / 30 held-out) adalah milik Person 3 dan belum ada, jadi **belum ada hasil benchmark yang diklaim**. `fixtures/example-prd-personas.json` hanya contoh untuk menjalankan runner.

@@ -2,6 +2,7 @@ packages:
   - apps/*
   - packages/*
   - contracts
+  - evaluation
 
 saveExact: true
 strictPeerDependencies: true

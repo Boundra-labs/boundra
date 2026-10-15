@@ -1,0 +1,26 @@
+{
+  "name": "@boundra/evaluation",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "benchmark": "node --env-file-if-exists=../.env dist/cli.js"
+  },
+  "dependencies": {
+    "@boundra/acce": "workspace:*",
+    "@boundra/database": "workspace:*",
+    "@boundra/llm": "workspace:*",
+    "@boundra/shared": "workspace:*",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "vitest": "5.0.4"
+  }
+}

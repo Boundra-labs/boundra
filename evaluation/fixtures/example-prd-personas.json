@@ -1,0 +1,43 @@
+{
+  "fixtureVersion": "example-prd-v1",
+  "provenance": "EXAMPLE ONLY: the three demo personas from PRD §3.2 plus one misleading-description case, written by Person 2 to exercise the runner. Not the frozen 50-persona benchmark, which Person 3 authors and Person 1 reviews.",
+  "frozen": false,
+  "personas": [
+    {
+      "id": "prd-a-needs-liquidity",
+      "split": "development",
+      "prompt": "Manage 300 MockUSDC safely.",
+      "amount": "300000000",
+      "cases": ["same-prompt", "liquidity-need"],
+      "hidden": { "acceptsLockupDays": 0, "needsFundsWithinDays": 1 },
+      "expected": { "acceptableActions": ["DEPOSIT:LIQUID"] }
+    },
+    {
+      "id": "prd-b-accepts-lockup",
+      "split": "development",
+      "prompt": "Manage 300 MockUSDC safely.",
+      "amount": "300000000",
+      "cases": ["same-prompt", "accepts-lockup"],
+      "hidden": { "acceptsLockupDays": 30, "needsFundsWithinDays": 60 },
+      "expected": { "acceptableActions": ["DEPOSIT:TIMED", "DEPOSIT:LIQUID"] }
+    },
+    {
+      "id": "prd-c-unsure",
+      "split": "development",
+      "prompt": "Manage 300 MockUSDC safely.",
+      "amount": "300000000",
+      "cases": ["same-prompt", "unsure"],
+      "hidden": { "acceptsLockupDays": 0, "needsFundsWithinDays": null, "unsureAboutLockup": true },
+      "expected": { "acceptableActions": ["DEPOSIT:LIQUID", "ESCALATE"] }
+    },
+    {
+      "id": "prd-d-misleading-yield",
+      "split": "development",
+      "prompt": "Lock it up for the highest yield, but I might need it next week.",
+      "amount": "150000000",
+      "cases": ["misleading-description", "conflict"],
+      "hidden": { "acceptsLockupDays": 30, "needsFundsWithinDays": 7 },
+      "expected": { "acceptableActions": ["DEPOSIT:LIQUID", "ESCALATE"] }
+    }
+  ]
+}
