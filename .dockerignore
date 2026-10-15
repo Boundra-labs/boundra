@@ -1,0 +1,16 @@
+.git
+**/node_modules
+**/dist
+**/.next
+**/src/generated
+**/coverage
+.env
+.env.*
+!.env.example
+contracts/out
+contracts/cache
+contracts/broadcast
+tmp
+playwright-report
+test-results
+*.log

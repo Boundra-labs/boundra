@@ -1,0 +1,10 @@
+# Template for the eventual HTTPS deployment. Supply APP_DOMAIN and put this
+# proxy on the same Docker network as web/api; public deployment is not enabled.
+{$APP_DOMAIN} {
+    handle /api/* {
+        reverse_proxy api:3001
+    }
+    handle {
+        reverse_proxy web:3000
+    }
+}

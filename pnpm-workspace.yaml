@@ -1,0 +1,17 @@
+packages:
+  - apps/*
+  - packages/*
+  - contracts
+
+saveExact: true
+strictPeerDependencies: true
+onlyBuiltDependencies:
+  - '@nestjs/core'
+  - '@prisma/engines'
+  - esbuild
+  - sharp
+  - unrs-resolver
+ignoredBuiltDependencies:
+  # The native optional package is used directly by bin.mjs. Upstream's fallback
+  # postinstall uses POSIX env syntax and fails under Windows cmd.exe.
+  - '@foundry-rs/forge'

@@ -1,0 +1,116 @@
+name: boundra
+
+services:
+  postgres:
+    image: postgres:17.9-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?Run pnpm env:setup first}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run pnpm env:setup first}
+      POSTGRES_DB: ${POSTGRES_DB:?Run pnpm env:setup first}
+    ports:
+      - '127.0.0.1:${POSTGRES_PORT:-55432}:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 5s
+      timeout: 3s
+      retries: 15
+    restart: unless-stopped
+
+  migrate:
+    profiles: [app]
+    build:
+      context: .
+      target: migrate
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  worker:
+    profiles: [app]
+    build:
+      context: .
+      target: worker
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+      CHAIN_ID: 84532
+      WORKER_POLL_INTERVAL_MS: 10000
+      WORKER_HEARTBEAT_MAX_AGE_MS: 45000
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ['CMD', 'node', 'dist/health.js']
+      interval: 15s
+      timeout: 8s
+      retries: 3
+      start_period: 20s
+    init: true
+    restart: unless-stopped
+
+  api:
+    profiles: [app]
+    build:
+      context: .
+      target: api
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+      API_HOST: 0.0.0.0
+      API_PORT: 3001
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3000}
+      CHAIN_ID: 84532
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      worker:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3001/api/v1/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 6s
+      retries: 3
+    init: true
+    restart: unless-stopped
+
+  web:
+    profiles: [app]
+    build:
+      context: .
+      target: web
+    environment:
+      NODE_ENV: production
+      API_INTERNAL_URL: http://api:3001
+      HOSTNAME: 0.0.0.0
+      PORT: 3000
+    ports:
+      - '127.0.0.1:3000:3000'
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3000/status').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 6s
+      retries: 3
+    init: true
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

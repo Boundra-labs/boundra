@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  foundation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:17.9-alpine
+        env:
+          POSTGRES_USER: boundra
+          POSTGRES_PASSWORD: ci-only-not-a-production-secret
+          POSTGRES_DB: boundra_test
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd="pg_isready -U boundra -d boundra_test"
+          --health-interval=5s --health-timeout=3s --health-retries=15
+    env:
+      DATABASE_URL: postgresql://boundra:ci-only-not-a-production-secret@localhost:55432/boundra_test?schema=public
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - name: Enable pinned package manager
+        run: corepack enable && corepack prepare pnpm@10.32.1 --activate
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm env:setup
+      - run: pnpm db:migrate
+      - run: pnpm check
+      - run: pnpm test:integration
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
