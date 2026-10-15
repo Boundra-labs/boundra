@@ -91,6 +91,8 @@ export interface MandatePreview {
   }[];
   narrowed: { dimension: string; reason: string }[];
   notices: string[];
+  /** Plain-language restatement shown to the owner; part of the hashed preview when present. */
+  plainSummary?: { text: string; source: 'TEMPLATE' | 'LLM' };
 }
 
 export type MandateBuildResult =

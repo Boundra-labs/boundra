@@ -1,5 +1,6 @@
 import { HttpStatus, Inject, Injectable } from '@nestjs/common';
-import { buildMandate, MandateBuildError, ONE_DAY } from '@boundra/acce';
+import { buildMandate, hashPreview, MandateBuildError, ONE_DAY } from '@boundra/acce';
+import { summarizeMandate, type LlmProvider } from '@boundra/llm';
 import { hashMandate } from '@boundra/chain';
 import { enqueueJob, type Mandate } from '@boundra/database';
 import {
@@ -14,6 +15,7 @@ import { isUuid, parse, type AuthenticatedOwner } from '../common/request';
 import { DatabaseService } from '../database.service';
 import { CHAIN_GATEWAY, chainUnavailable, type ChainGateway } from '../chain/chain.gateway';
 import { IntentsService, stateFromQuestions } from '../intents/intents.service';
+import { LLM_PROVIDER } from '../intents/wording.provider';
 
 export const VERIFY_AUTHORIZATION_JOB = 'VERIFY_AUTHORIZATION';
 
@@ -37,6 +39,7 @@ export class MandatesService {
     @Inject(DatabaseService) private readonly database: DatabaseService,
     @Inject(CHAIN_GATEWAY) private readonly chain: ChainGateway,
     @Inject(IntentsService) private readonly intents: IntentsService,
+    @Inject(LLM_PROVIDER) private readonly llm: LlmProvider,
   ) {}
 
   private get db() {
@@ -112,7 +115,11 @@ export class MandatesService {
         reason: result.selection.reason,
       };
     }
-    const { tuple, preview, previewHash, selection } = result;
+    const { tuple, preview, selection } = result;
+    // The summary is generated before the transaction and hashed with the preview it describes.
+    const summary = await summarizeMandate(this.llm, preview);
+    preview.plainSummary = { text: summary.value, source: summary.source };
+    const previewHash = hashPreview(preview);
     const draft = await this.db.$transaction(async (tx) => {
       const latest = await tx.mandate.findFirst({
         where: { intentId },
@@ -153,7 +160,12 @@ export class MandatesService {
           intentId,
           mandateId: created.id,
           type: 'MANDATE_PREVIEWED',
-          payload: { revision: created.revision, vault: selection.vault, previewHash },
+          payload: {
+            revision: created.revision,
+            vault: selection.vault,
+            previewHash,
+            summary: { source: summary.source, fallbackReason: summary.fallbackReason },
+          },
         },
       });
       return created;

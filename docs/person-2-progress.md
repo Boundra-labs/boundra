@@ -11,7 +11,7 @@ Rencana lengkap: [person-2-plan.md](./person-2-plan.md). Setiap fase berakhir de
 | 4    | Auth SIWE & API (WS3, WS4, WS6 bagian API)                  | ✅ Selesai |
 | 5    | Verifikasi otorisasi/funding & orkestrasi worker (WS6, WS7) | ✅ Selesai |
 | 6    | E2E chain lokal (anvil)                                     | ✅ Selesai |
-| 7    | Provider LLM (WS8)                                          | ⏳ Belum   |
+| 7    | Provider LLM (WS8)                                          | ✅ Selesai |
 | 8    | Benchmark runner (WS9)                                      | ⏳ Belum   |
 | 9    | Dokumentasi, CI, PR                                         | ⏳ Belum   |
 
@@ -146,3 +146,23 @@ Kriteria:
 - [x] Typecheck worker kini mencakup tes (`tsconfig.e2e.json`); satu kesalahan tipe lama di `execution.test.ts` diperbaiki.
 
 Batas klaim: ini bukti lokal di anvil, bukan transaksi publik Base Sepolia. Bukti publik tetap menunggu deploy Person 1 dan kunci runtime.
+
+## Fase 7 — Provider LLM
+
+Paket baru `packages/llm` (`@anthropic-ai/sdk` 0.131.0):
+
+- `AnthropicProvider`: `client.beta.messages.parse` dengan `betaZodOutputFormat` (output terstruktur tervalidasi Zod), `output_config.effort: "low"`, fallback refusal server-side (`fallbacks: "default"`, beta `server-side-fallback-2026-07-01`; tidak dikirim untuk model Haiku yang tidak mendukungnya), deadline 20 detik total (`AbortSignal`), maksimal 3 percobaan, budget token per jam. Model default `claude-opus-5-5`, dapat diganti lewat `LLM_MODEL`. Semua bentuk API diverifikasi dari definisi tipe SDK yang terpasang.
+- `DisabledProvider` adalah default (`LLM_PROVIDER=disabled`): teks berasal dari template yang direview dan diberi label `TEMPLATE`.
+- `wordQuestion`: model hanya merumuskan ulang pertanyaan yang sudah dipilih planner; hasil divalidasi `validateWording` (ID/urutan alternatif tetap, tanpa angka/vault/protokol/alamat/URL/klaim jaminan baru).
+- `summarizeMandate`: ringkasan bahasa biasa untuk preview mandat; hanya boleh menyatakan ulang fakta preview, dan ikut di-hash bersama preview sehingga approval mengikat teks yang dilihat owner.
+- API: pertanyaan ACCE memakai provider; sumber teks (`wordingSource`) dan alasan fallback dicatat di activity; preview memuat `plainSummary`.
+
+Kriteria:
+
+- [x] Output model yang valid dipakai dan diberi label `LLM`; request memakai model, effort, fallback, batas token dan deadline yang benar.
+- [x] Refusal, output terpotong/malformed, fakta sisipan, alternatif yang diubah, timeout, error provider, budget habis dan provider nonaktif → template, dengan alasan tercatat; alur tidak pernah gagal karena LLM.
+- [x] Ringkasan mandat yang mengarang angka atau klaim jaminan ditolak (`GUARANTEE_CLAIM`) dan diganti ringkasan deterministik.
+- [x] Lewat HTTP: pertanyaan ber-wording model tetap memakai ID alternatif yang sama; alasan fallback ringkasan tersimpan di activity.
+- [x] Tes: `packages/llm` 12/12, ACCE 19/19, API 4/4 + 19/19, E2E anvil 1/1; typecheck, lint dan format bersih.
+
+**Pending (jujur):** belum ada `LLM_API_KEY` di lingkungan ini, jadi belum ada run provider nyata yang tercatat. Semua jalur diuji dengan klien SDK fake. Klaim "generative AI" untuk demo/benchmark membutuhkan run dengan key runtime (PRD §13.2).

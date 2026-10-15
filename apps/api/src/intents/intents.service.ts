@@ -81,7 +81,13 @@ export class IntentsService {
           ownerId: owner.id,
           intentId: created.id,
           type: 'INTENT_CREATED',
-          payload: { amount: input.amount, questionsPlanned: planned ? 1 : 0 },
+          payload: {
+            amount: input.amount,
+            questionsPlanned: planned ? 1 : 0,
+            wording: text
+              ? { source: text.source, fallbackReason: text.fallbackReason ?? null }
+              : null,
+          },
         },
       });
       return created;
@@ -155,6 +161,9 @@ export class IntentsService {
             dimension,
             answer: input.alternativeId,
             status,
+            nextWording: text
+              ? { source: text.source, fallbackReason: text.fallbackReason ?? null }
+              : null,
           },
         },
       });

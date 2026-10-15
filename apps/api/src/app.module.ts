@@ -12,7 +12,8 @@ import { SessionGuard } from './auth/session.guard';
 import { CHAIN_GATEWAY, RpcChainGateway } from './chain/chain.gateway';
 import { IntentsController } from './intents/intents.controller';
 import { IntentsService } from './intents/intents.service';
-import { TemplateWordingProvider, WORDING_PROVIDER } from './intents/wording.provider';
+import { createProvider, readLlmConfig, type LlmProvider } from '@boundra/llm';
+import { LLM_PROVIDER, LlmWordingProvider, WORDING_PROVIDER } from './intents/wording.provider';
 import { MandatesController } from './mandates/mandates.controller';
 import { MandatesService } from './mandates/mandates.service';
 import { AccountController } from './account/account.controller';
@@ -60,7 +61,12 @@ class ConfigModule {}
       inject: [APP_CONFIG],
       useFactory: (c: AppConfig) => new RpcChainGateway(c),
     },
-    { provide: WORDING_PROVIDER, useClass: TemplateWordingProvider },
+    { provide: LLM_PROVIDER, useFactory: () => createProvider(readLlmConfig()) },
+    {
+      provide: WORDING_PROVIDER,
+      inject: [LLM_PROVIDER],
+      useFactory: (llm: LlmProvider) => new LlmWordingProvider(llm),
+    },
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: SessionGuard },
     { provide: APP_FILTER, useClass: ApiExceptionFilter },

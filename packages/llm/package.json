@@ -1,0 +1,23 @@
+{
+  "name": "@boundra/llm",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "0.131.0",
+    "@boundra/acce": "workspace:*",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "vitest": "5.0.4"
+  }
+}

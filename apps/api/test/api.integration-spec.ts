@@ -527,3 +527,116 @@ describe('malformed input', () => {
     }
   });
 });
+
+describe('model wording through the provider port', () => {
+  it('labels validated model wording and falls back with a recorded reason', async () => {
+    const { LLM_PROVIDER } = await import('../src/intents/wording.provider');
+    const gateway = new FakeGateway();
+    const calls: string[] = [];
+    const fakeLlm = {
+      name: 'anthropic' as const,
+      model: 'fake-model',
+      async generate(request: { purpose: string; prompt: string }) {
+        calls.push(request.purpose);
+        const usage = { inputTokens: 10, outputTokens: 5 };
+        if (request.purpose === 'acce-question-wording') {
+          const { alternatives } = JSON.parse(request.prompt);
+          return {
+            ok: true as const,
+            value: {
+              text: 'Is it fine if these funds stay locked for 30 days for a higher illustrative yield?',
+              alternatives,
+            },
+            usage,
+            model: 'fake-model',
+            latencyMs: 1,
+          };
+        }
+        // An invented fact must never reach the owner.
+        return {
+          ok: true as const,
+          value: { summary: 'Guaranteed 12% returns.' },
+          usage,
+          model: 'fake-model',
+          latencyMs: 1,
+        };
+      },
+    };
+    Object.assign(process.env, { WEB_ORIGIN: ORIGIN, RATE_LIMIT_PER_MINUTE: '10000' });
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideProvider(CHAIN_GATEWAY)
+      .useValue(gateway)
+      .overrideProvider(LLM_PROVIDER)
+      .useValue(fakeLlm)
+      .compile();
+    const app = moduleRef.createNestApplication<NestExpressApplication>({ bodyParser: false });
+    configureApp(app, readConfig());
+    await app.init();
+    const db = createDatabaseClient(process.env.DATABASE_URL!);
+    const account = newAccount();
+    try {
+      const challenge = await request(app.getHttpServer())
+        .post('/api/v1/auth/challenge')
+        .send({ address: account.address });
+      const signature = await account.signMessage({ message: challenge.body.message });
+      const verified = await request(app.getHttpServer())
+        .post('/api/v1/auth/verify')
+        .send({ message: challenge.body.message, signature });
+      const cookie = String(verified.headers['set-cookie']).split(';')[0]!;
+      const post = (path: string, body: object = {}) =>
+        request(app.getHttpServer())
+          .post(`/api/v1${path}`)
+          .set('Cookie', cookie)
+          .set('Origin', ORIGIN)
+          .set('X-CSRF-Token', verified.body.csrfToken)
+          .send(body);
+      const created = await post('/intents', {
+        objective: 'Manage 300 MockUSDC safely',
+        amount: '300000000',
+        chainId: 84532,
+      });
+      expect(created.body.question).toMatchObject({
+        wordingSource: 'LLM',
+        text: 'Is it fine if these funds stay locked for 30 days for a higher illustrative yield?',
+      });
+      expect(created.body.question.alternatives.map((a: { id: string }) => a.id)).toEqual([
+        'no_lockup',
+        'up_to_30_days',
+        'unsure',
+      ]);
+      await post(`/intents/${created.body.id}/answers`, {
+        questionId: created.body.question.questionId,
+        alternativeId: 'no_lockup',
+      });
+      gateway.executors.set(account.address.toLowerCase(), randomAddress());
+      await post('/executors/register');
+      const draft = await post(`/intents/${created.body.id}/mandate-drafts`);
+      expect(draft.body.preview.plainSummary.source).toBe('TEMPLATE');
+      expect(draft.body.preview.plainSummary.text).not.toMatch(/12%/);
+      const previewed = await db.activityEvent.findFirstOrThrow({
+        where: { mandateId: draft.body.id, type: 'MANDATE_PREVIEWED' },
+      });
+      expect(previewed.payload).toMatchObject({
+        summary: { source: 'TEMPLATE', fallbackReason: 'GUARANTEE_CLAIM' },
+      });
+      expect(calls).toEqual(['acce-question-wording', 'mandate-summary']);
+    } finally {
+      const ownerRow = await db.walletIdentity.findUnique({
+        where: { address: account.address.toLowerCase() },
+      });
+      if (ownerRow) {
+        await db.activityEvent.deleteMany({ where: { ownerId: ownerRow.id } });
+        await db.mandate.deleteMany({ where: { ownerId: ownerRow.id } });
+        await db.question.deleteMany({ where: { intent: { ownerId: ownerRow.id } } });
+        await db.preferenceRecord.deleteMany({ where: { intent: { ownerId: ownerRow.id } } });
+        await db.intent.deleteMany({ where: { ownerId: ownerRow.id } });
+        await db.executor.deleteMany({ where: { ownerId: ownerRow.id } });
+        await db.authSession.deleteMany({ where: { ownerId: ownerRow.id } });
+        await db.walletIdentity.delete({ where: { id: ownerRow.id } });
+      }
+      await db.authChallenge.deleteMany({ where: { address: account.address.toLowerCase() } });
+      await db.$disconnect();
+      await app.close();
+    }
+  });
+});
