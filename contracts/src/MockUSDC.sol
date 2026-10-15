@@ -4,7 +4,7 @@ pragma solidity 0.8.30;
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
-/// @notice Testnet-only fixture. Faucet, vaults and executor are separate implementation tasks.
+/// @notice Testnet-only capped asset. Deployment transfers mint ownership to the fixed-grant faucet.
 contract MockUSDC is ERC20, Ownable {
     uint256 public constant MAX_SUPPLY = 1_000_000 * 10 ** 6;
 
