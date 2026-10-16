@@ -7,6 +7,8 @@ export interface TestWalletOptions {
   chainId?: number;
   /** Decline every signature request, as if the owner pressed Reject. */
   rejectSignatures?: boolean;
+  /** Use a known key (e.g. a funded local anvil account) instead of a fresh random one. */
+  privateKey?: Hex;
 }
 
 /**
@@ -15,7 +17,7 @@ export interface TestWalletOptions {
  * key never enters the page.
  */
 export async function installTestWallet(page: Page, options: TestWalletOptions = {}) {
-  const account = privateKeyToAccount(generatePrivateKey());
+  const account = privateKeyToAccount(options.privateKey ?? generatePrivateKey());
   let signRequests = 0;
   await page.exposeFunction('__testWalletSign', async (messageHex: string) => {
     signRequests++;

@@ -1,12 +1,7 @@
-import type { Metadata } from 'next';
-import { OwnerApp } from '@/components/app/owner-app';
-import '@/components/app/app.css';
+import { StartIntent } from '@/components/app/start-intent';
 
-export const metadata: Metadata = {
-  title: 'Boundra app · Base Sepolia testnet',
-  description: 'Set boundaries for your agent wallet on Base Sepolia.',
-};
-
-export default function AppPage() {
-  return <OwnerApp />;
+/** Start a mandate from a goal; `?goal=` carries the text typed on the homepage. */
+export default async function AppHome({ searchParams }: PageProps<'/app'>) {
+  const { goal } = await searchParams;
+  return <StartIntent initialGoal={typeof goal === 'string' ? goal.slice(0, 2000) : ''} />;
 }

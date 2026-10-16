@@ -74,8 +74,9 @@ test('owners switch to Base Sepolia, then sign in with a signature', async ({ pa
   await expect(page.getByText('It is not a transaction and costs no gas.')).toBeVisible();
   await page.getByRole('button', { name: 'Sign in with wallet' }).click();
 
-  const short = `${wallet.address.slice(0, 6).toLowerCase()}…${wallet.address.slice(-4).toLowerCase()}`;
-  await expect(page.getByRole('heading', { name: `Welcome, ${short}` })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'What should your agent do?' })).toBeVisible();
+  const short = `${wallet.address.slice(0, 6)}…${wallet.address.slice(-4)}`.toLowerCase();
+  await expect(page.getByRole('banner')).toContainText(short);
   await expect(page.getByRole('banner').getByRole('button', { name: 'Sign out' })).toBeVisible();
 });
 

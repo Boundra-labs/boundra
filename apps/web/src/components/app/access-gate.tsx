@@ -1,7 +1,7 @@
 'use client';
 
 import { BASE_SEPOLIA_CHAIN_ID } from '@boundra/shared';
-import type { ReactNode } from 'react';
+import { createContext, useContext, type ReactNode } from 'react';
 import { injected, useConnect, useConnection, useSwitchChain } from 'wagmi';
 import { isApiError } from '@/lib/api';
 import { SignInOriginError, useSession, useSignIn, useSignOut, type Session } from '@/lib/session';
@@ -60,12 +60,21 @@ function signInProblem(error: unknown) {
   return walletErrorMessage(error, 'signed');
 }
 
+const OwnerSessionContext = createContext<Session | null>(null);
+
+/** The signed-in owner's session; only available inside the access gate. */
+export function useOwnerSession(): Session {
+  const session = useContext(OwnerSessionContext);
+  if (!session) throw new Error('useOwnerSession must be used inside <AccessGate>');
+  return session;
+}
+
 /**
  * Every owner screen sits behind three checks, in order: a connected wallet, Base Sepolia, and
  * a signed-in session for that same wallet. Signing in is a message signature, not a
  * transaction, and never approves a mandate.
  */
-export function AccessGate({ children }: { children: (session: Session) => ReactNode }) {
+export function AccessGate({ children }: { children: ReactNode }) {
   const connection = useConnection();
   const connect = useConnect();
   const switchChain = useSwitchChain();
@@ -103,7 +112,7 @@ export function AccessGate({ children }: { children: (session: Session) => React
   const current = session.data;
 
   if (current && connected && onBaseSepolia && current.address === address!.toLowerCase())
-    return children(current);
+    return <OwnerSessionContext value={current}>{children}</OwnerSessionContext>;
 
   // Signed in, but the wallet now shows a different account than the session belongs to.
   if (current && connected && current.address !== address!.toLowerCase())

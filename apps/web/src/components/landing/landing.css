@@ -428,18 +428,6 @@
   letter-spacing: 0.02em;
   color: var(--muted);
 }
-.intent-status {
-  margin: 8px 0 0 24px;
-  min-height: 1.4em;
-  font-size: 14px;
-  line-height: 1.5;
-  color: var(--ink);
-}
-.intent-status a {
-  font-weight: 650;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
 .hero-mascot {
   position: absolute;
   z-index: 2;

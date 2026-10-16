@@ -12,14 +12,6 @@ test('prototype makes its scope explicit', async ({ page }) => {
   await expect(page.getByText(/Signing in only identifies your wallet/)).toBeAttached();
 });
 
-test('the intent field says plainly that nothing is sent yet', async ({ page }) => {
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Start with this goal' }).click();
-  await expect(
-    page.getByRole('status').filter({ hasText: 'nothing was sent or signed' }),
-  ).toBeVisible();
-});
-
 test('an unknown preference never makes the lockup vault eligible', async ({ page }) => {
   await page.goto('/');
   await page.getByLabel('I am not sure').check();
