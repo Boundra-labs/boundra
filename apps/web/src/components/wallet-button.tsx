@@ -1,6 +1,7 @@
 'use client';
 
 import { injected, useConnect, useConnection, useDisconnect } from 'wagmi';
+import { ArrowRight } from './landing/icons';
 
 export function WalletButton() {
   const connection = useConnection();
@@ -10,7 +11,7 @@ export function WalletButton() {
     <div className="wallet-area">
       {connection.isConnected ? (
         <>
-          <button className="button secondary" onClick={() => disconnect.mutate()}>
+          <button className="button button-quiet" onClick={() => disconnect.mutate()}>
             {connection.address?.slice(0, 6)}…{connection.address?.slice(-4)} · Disconnect
           </button>
           <span className="wallet-note">
@@ -25,7 +26,8 @@ export function WalletButton() {
           disabled={connect.isPending}
           onClick={() => connect.mutate({ connector: injected() })}
         >
-          {connect.isPending ? 'Connecting…' : 'Connect wallet'} <span aria-hidden="true">↗</span>
+          {connect.isPending ? 'Connecting…' : 'Connect wallet'}
+          <ArrowRight className="button-arrow" />
         </button>
       )}
       {connect.error && (
