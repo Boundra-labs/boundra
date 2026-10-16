@@ -50,7 +50,9 @@ Creating an intent checks your MockUSDC balance on chain, so the owner journey n
 node scripts/dev-chain.mjs --fund 0xYourWalletAddress
 ```
 
-It starts anvil with chain ID 84532 on `http://127.0.0.1:8545`, runs `contracts/script/DeployBoundra.s.sol`, writes a manifest pinned to the deployed code hashes in `tmp/dev-chain/`, sends gas money to each `--fund` address and prints the `.env` lines to set (`BASE_SEPOLIA_RPC_URL`, `NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL`, `DEPLOYMENT_MANIFEST_PATH`, `OPERATOR_ADDRESS`). Restart the API, worker and web dev server after changing `.env`, and add the local network to your wallet. The chain uses anvil's public development keys and is not persisted; nothing on it is Base Sepolia evidence.
+It starts anvil with chain ID 84532 on `http://127.0.0.1:8545`, runs `contracts/script/DeployBoundra.s.sol`, writes a manifest pinned to the deployed code hashes in `tmp/dev-chain/`, sends gas money to each `--fund` address and prints the `.env` lines to set (`BASE_SEPOLIA_RPC_URL`, `NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL`, `DEPLOYMENT_MANIFEST_PATH`, `OPERATOR_ADDRESS`). Restart the API, worker and web dev server after changing `.env`, and add the local network to your wallet. The chain uses anvil's public development keys; nothing on it is Base Sepolia evidence.
+
+Chain state is saved in `tmp/dev-chain/`, so stopping and restarting the script continues the same chain and the database stays consistent with it. `--fresh` deploys a new chain: reset the database afterwards (`prisma migrate reset` in `packages/database`), because its executors and mandates belong to the old chain.
 
 ## Workspace
 

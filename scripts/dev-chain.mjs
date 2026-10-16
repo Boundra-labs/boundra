@@ -6,14 +6,16 @@
  * Uses anvil's public development mnemonic. Those keys are published and only ever valid on this
  * local chain; nothing here is Base Sepolia evidence.
  *
- *   node scripts/dev-chain.mjs [--port 8545] [--fund 0xAddress ...]
+ *   node scripts/dev-chain.mjs [--port 8545] [--fund 0xAddress ...] [--fresh]
  *
- * Leaves anvil running in the foreground; stop it with Ctrl+C. State is not persisted, so a
- * restart deploys fresh contracts and rewrites the manifest.
+ * Chain state is saved in tmp/dev-chain/, so a restart continues the same chain and the database
+ * stays consistent with it. `--fresh` deploys a new chain; reset the database afterwards, since
+ * its executors and mandates belong to the old one.
  */
-import { rmSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { getAddress } from 'viem';
+import { createPublicClient, getAddress, http } from 'viem';
+import { baseSepolia } from 'viem/chains';
 import { deployBoundra, devAccount, fundGas, repo, startAnvil } from './lib/local-chain.mjs';
 
 const args = process.argv.slice(2);
@@ -24,42 +26,65 @@ const option = (name, fallback) => {
 const fund = args.flatMap((arg, i) => (args[i - 1] === '--fund' ? [getAddress(arg)] : []));
 
 const workDir = join(repo, 'tmp', 'dev-chain');
-rmSync(workDir, { recursive: true, force: true });
+const statePath = join(workDir, 'anvil-state.json');
+const manifestPath = join(workDir, 'manifest.json');
+if (args.includes('--fresh')) rmSync(workDir, { recursive: true, force: true });
+const resuming = existsSync(statePath) && existsSync(manifestPath);
 
 const { anvil, rpc } = await startAnvil({
   port: Number(option('--port', '8545')),
   stdio: 'inherit',
+  statePath,
 });
 const stop = () => anvil.kill();
 process.on('SIGINT', stop);
 process.on('SIGTERM', stop);
 anvil.on('exit', (code) => process.exit(code ?? 0));
 
-let deployment;
+let manifest;
+let deployed = false;
 try {
-  deployment = await deployBoundra({ rpc, workDir });
+  if (resuming) {
+    manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    const client = createPublicClient({ chain: baseSepolia, transport: http(rpc) });
+    const code = await client.getCode({ address: manifest.factory });
+    if (!code || code === '0x') throw new Error('saved state has no contracts');
+  } else {
+    ({ manifest } = await deployBoundra({ rpc, workDir }));
+    deployed = true;
+  }
   await fundGas({ rpc, addresses: fund });
 } catch (error) {
   stop();
+  if (resuming)
+    console.error(
+      `\nThe saved chain in ${workDir} could not be resumed (${error.message}).\nRun with --fresh to deploy a new chain, then reset the database.`,
+    );
   throw error;
 }
-const { manifest, manifestPath, operator } = deployment;
 
 console.log(`
-Local chain ready on ${rpc} (chain ID 84532). Contracts from contracts/script/DeployBoundra.s.sol:
+Local chain ${deployed ? 'deployed' : 'resumed'} on ${rpc} (chain ID 84532). Contracts from contracts/script/DeployBoundra.s.sol:
   factory      ${manifest.factory}
   MockUSDC     ${manifest.mockUsdc}
   faucet       ${manifest.faucet}
   LiquidVault  ${manifest.liquidVault}
   TimedVault   ${manifest.timedVault}
   risk admin   ${devAccount(1).address}  (anvil account 1)
-${fund.length ? `Sent 10 ETH for gas to: ${fund.join(', ')}\n` : ''}
+${fund.length ? `Sent 10 ETH for gas to: ${fund.join(', ')}\n` : ''}${
+  deployed
+    ? `
+This is a new chain: if the database holds data from an earlier chain, reset it
+(packages/database: prisma migrate reset), since those executors no longer exist.
+`
+    : ''
+}
 Point the stack at it in .env, then restart the API and worker:
   BASE_SEPOLIA_RPC_URL=${rpc}
   NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL=${rpc}
   DEPLOYMENT_MANIFEST_PATH=${manifestPath}
-  OPERATOR_ADDRESS=${operator}
+  OPERATOR_ADDRESS=${devAccount(3).address}
   CHAIN_CONFIRMATIONS=2
 
 In your browser wallet, add a network with RPC ${rpc} and chain ID 84532.
-Press Ctrl+C to stop the chain.`);
+Press Ctrl+C to stop the chain; its state is kept for the next start.`);

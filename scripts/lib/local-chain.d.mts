@@ -21,6 +21,8 @@ export function isChainUp(rpc: string): Promise<boolean>;
 export function startAnvil(options?: {
   port?: number;
   stdio?: StdioOptions;
+  /** Load chain state from, and keep saving it to, this file. */
+  statePath?: string;
 }): Promise<{ anvil: ChildProcess; rpc: string }>;
 export function deployBoundra(options: {
   rpc: string;

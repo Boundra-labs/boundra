@@ -47,8 +47,11 @@ export async function isChainUp(rpc) {
   }
 }
 
-/** Starts anvil as chain 84532 and resolves once it answers RPC calls. */
-export async function startAnvil({ port = 8545, stdio = 'ignore' } = {}) {
+/**
+ * Starts anvil as chain 84532 and resolves once it answers RPC calls. With `statePath`, chain
+ * state is loaded from and saved to that file (every few seconds, so a hard kill loses little).
+ */
+export async function startAnvil({ port = 8545, stdio = 'ignore', statePath } = {}) {
   const rpc = `http://127.0.0.1:${port}`;
   const anvil = spawn(
     process.execPath,
@@ -61,6 +64,7 @@ export async function startAnvil({ port = 8545, stdio = 'ignore' } = {}) {
       '--block-time',
       '1',
       '--silent',
+      ...(statePath ? ['--state', statePath, '--state-interval', '5'] : []),
     ],
     { stdio },
   );
