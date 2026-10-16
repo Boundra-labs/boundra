@@ -1,27 +1,18 @@
 import { expect, test, type Page } from '@playwright/test';
-import { mockIntents, mockPublicConfig, mockSignedIn } from './support/mock-api';
-import { installTestWallet } from './support/wallet';
+import { mockIntents, readyOwnerAt } from './support/mock-api';
 
-async function signedInAt(page: Page, path: string) {
-  const wallet = await installTestWallet(page);
-  await mockSignedIn(page, wallet.address);
-  await mockPublicConfig(page);
-  await page.goto(path);
-  await page.getByRole('button', { name: 'Connect wallet' }).click();
-}
+const signedInAt = (page: Page, path: string) => readyOwnerAt(page, path);
 
 const question = (page: Page, text: RegExp) => page.getByRole('group', { name: text });
 
 test('a goal typed on the homepage carries into the app', async ({ page }) => {
-  const wallet = await installTestWallet(page);
-  await mockSignedIn(page, wallet.address);
-  await mockPublicConfig(page);
-  await page.goto('/');
+  await readyOwnerAt(page, '/', { connect: false });
   await page.getByRole('button', { name: 'Start with this goal' }).click();
   await expect(page).toHaveURL(/\/app\?goal=Manage\+300\+MockUSDC\+safely/);
   await page.getByRole('button', { name: 'Connect wallet' }).click();
   await expect(page.getByLabel('Your goal')).toHaveValue('Manage 300 MockUSDC safely');
   await expect(page.getByLabel('Amount to delegate')).toHaveValue('300');
+  await expect(page.getByText('Available to delegate:')).toContainText('1,000 MockUSDC');
 });
 
 test('amounts are validated before anything is sent', async ({ page }) => {

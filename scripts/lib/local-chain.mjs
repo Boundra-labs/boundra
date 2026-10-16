@@ -137,10 +137,13 @@ export async function deployBoundra({ rpc, workDir }) {
   return { manifest, manifestPath, operator: devAccount(3).address };
 }
 
-/** Sends gas money from the deployer account to each address. */
-export async function fundGas({ rpc, addresses, ether = '10' }) {
+/**
+ * Sends gas money to each address from dev account `funder` (the deployer by default). Parallel
+ * callers should use different funders so their transactions never race for the same nonce.
+ */
+export async function fundGas({ rpc, addresses, ether = '10', funder: from = 0 }) {
   const funder = createWalletClient({
-    account: devAccount(0),
+    account: devAccount(from),
     chain: baseSepolia,
     transport: http(rpc),
   });

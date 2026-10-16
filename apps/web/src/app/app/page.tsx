@@ -1,7 +1,7 @@
-import { StartIntent } from '@/components/app/start-intent';
+import { OwnerHome } from '@/components/app/owner-home';
 
-/** Start a mandate from a goal; `?goal=` carries the text typed on the homepage. */
+/** Account setup, then a new goal; `?goal=` carries the text typed on the homepage. */
 export default async function AppHome({ searchParams }: PageProps<'/app'>) {
   const { goal } = await searchParams;
-  return <StartIntent initialGoal={typeof goal === 'string' ? goal.slice(0, 2000) : ''} />;
+  return <OwnerHome initialGoal={typeof goal === 'string' ? goal.slice(0, 2000) : ''} />;
 }

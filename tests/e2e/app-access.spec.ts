@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { createSiweMessage, generateSiweNonce } from 'viem/siwe';
+import { e2eChain } from './support/chain';
+import { mockAccountApi, mockPublicConfig } from './support/mock-api';
 import { installTestWallet } from './support/wallet';
 
 /** Next.js also renders an (empty) route announcer with role=alert, so match by text. */
@@ -65,6 +67,8 @@ test('an unreachable API is reported instead of a sign-in prompt', async ({ page
 test('owners switch to Base Sepolia, then sign in with a signature', async ({ page }) => {
   const wallet = await installTestWallet(page, { chainId: 1 });
   await mockAuthApi(page);
+  await mockPublicConfig(page, e2eChain());
+  await mockAccountApi(page, wallet.address);
   await page.goto('/app');
 
   await page.getByRole('button', { name: 'Connect wallet' }).click();
@@ -74,7 +78,7 @@ test('owners switch to Base Sepolia, then sign in with a signature', async ({ pa
   await expect(page.getByText('It is not a transaction and costs no gas.')).toBeVisible();
   await page.getByRole('button', { name: 'Sign in with wallet' }).click();
 
-  await expect(page.getByRole('heading', { name: 'What should your agent do?' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Get your wallet ready' })).toBeVisible();
   const short = `${wallet.address.slice(0, 6)}…${wallet.address.slice(-4)}`.toLowerCase();
   await expect(page.getByRole('banner')).toContainText(short);
   await expect(page.getByRole('banner').getByRole('button', { name: 'Sign out' })).toBeVisible();

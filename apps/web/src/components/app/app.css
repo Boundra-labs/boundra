@@ -530,6 +530,122 @@
   color: var(--muted);
 }
 
+/* ---------- Account setup ---------- */
+.setup-list {
+  list-style: none;
+  margin: 28px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+.setup-item {
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #fff;
+}
+.setup-item.is-done {
+  background: var(--sage-soft);
+  border-color: transparent;
+}
+.setup-item.is-blocked {
+  border-color: var(--amber);
+}
+.setup-mark {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  font-weight: 700;
+  font-size: 14px;
+}
+.setup-item.is-done .setup-mark {
+  border-color: var(--sage);
+  color: var(--green);
+  background: var(--ivory);
+}
+.setup-item.is-blocked .setup-mark {
+  border-color: var(--amber);
+  color: var(--amber-ink);
+}
+.setup-item.is-action .setup-mark {
+  border-color: var(--forest);
+}
+.setup-body h3 {
+  margin: 4px 0 0;
+  font-size: 16px;
+}
+.setup-body p {
+  margin: 6px 0 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+.setup-body .button {
+  margin-top: 14px;
+}
+
+/* ---------- Transaction status ---------- */
+.setup-body .tx-status,
+.tx-status {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(18, 45, 39, 0.05);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+.tx-status.is-pending {
+  background: rgba(155, 175, 141, 0.2);
+}
+.tx-status.is-confirmed {
+  background: var(--lime-soft);
+  color: var(--green);
+}
+.tx-status.is-problem {
+  background: var(--amber-soft);
+  color: var(--amber-ink);
+}
+.tx-status a,
+.tx-status code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+.tx-status a {
+  text-decoration: underline;
+}
+
+.account-summary {
+  margin-bottom: 22px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--line);
+}
+.account-summary dl {
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+.account-summary dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+}
+.account-summary dt {
+  color: var(--muted);
+}
+.account-summary dd {
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
 @media (max-width: 900px) {
   .flow {
     grid-template-columns: 1fr;

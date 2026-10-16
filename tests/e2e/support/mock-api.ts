@@ -1,9 +1,12 @@
 import type { Page } from '@playwright/test';
+import type { Address } from 'viem';
+import { e2eChain, executorOf, prepareOwner, type E2EChain } from './chain';
+import { installTestWallet } from './wallet';
 
 /**
- * Deterministic stand-ins for the Boundra API so browser tests run in CI without PostgreSQL or a
- * chain. Shapes follow docs/api.md and the API's intent view; the real API is exercised by the
- * API and chain test suites.
+ * Deterministic stand-ins for the Boundra API so browser tests run in CI without PostgreSQL.
+ * Chain state is real (the E2E chain from global-setup.ts). Shapes follow docs/api.md and the
+ * API's views; the real API is exercised by the API and chain test suites.
  */
 
 export async function mockSignedIn(page: Page, address: string) {
@@ -14,19 +17,80 @@ export async function mockSignedIn(page: Page, address: string) {
   );
 }
 
-export async function mockPublicConfig(page: Page, configured = false) {
+/** `GET /config/public`, pointing at the E2E chain's contracts (or unconfigured without one). */
+export async function mockPublicConfig(page: Page, chain: E2EChain | null) {
   await page.route('**/api/v1/config/public', (route) =>
     route.fulfill({
       json: {
         chainId: 84532,
         network: 'Base Sepolia (testnet)',
         explorer: 'https://sepolia.basescan.org',
-        configured,
-        contracts: null,
-        operator: null,
+        configured: Boolean(chain),
+        contracts: chain && {
+          factory: chain.manifest.factory,
+          mockUsdc: chain.manifest.mockUsdc,
+          faucet: chain.manifest.faucet,
+          liquidVault: chain.manifest.liquidVault,
+          timedVault: chain.manifest.timedVault,
+          riskAdmin: chain.manifest.riskAdmin,
+        },
+        operator: chain?.operator ?? null,
       },
     }),
   );
+}
+
+/**
+ * `GET /dashboard` and `POST /executors/register`. Registration checks the real E2E chain, like
+ * the API does: it succeeds only once the factory reports an executor for the owner.
+ */
+export async function mockAccountApi(
+  page: Page,
+  owner: Address,
+  { registered = null }: { registered?: Address | null } = {},
+) {
+  let executor = registered;
+  await page.route('**/api/v1/dashboard', (route) =>
+    route.fulfill({
+      json: {
+        labels: ['TESTNET'],
+        owner: owner.toLowerCase(),
+        executor: executor?.toLowerCase() ?? null,
+        mandate: null,
+        chainStatus: executor ? 'ok' : 'no_executor',
+        chain: null,
+      },
+    }),
+  );
+  await page.route('**/api/v1/executors/register', async (route) => {
+    const found = await executorOf(owner);
+    if (!found)
+      return route.fulfill({
+        status: 409,
+        json: {
+          error: {
+            code: 'EXECUTOR_NOT_REGISTERED',
+            message: 'The factory has no executor for your wallet yet',
+            recovery:
+              'Call createExecutor() on the factory, wait for confirmation, then try again.',
+          },
+        },
+      });
+    executor = found;
+    return route.fulfill({ json: { address: found.toLowerCase(), verifiedAtBlock: '1' } });
+  });
+}
+
+/** A signed-in owner whose account is ready: gas, MockUSDC and a verified executor. */
+export async function readyOwnerAt(page: Page, path: string, { connect = true } = {}) {
+  const owner = await prepareOwner();
+  const wallet = await installTestWallet(page, { privateKey: owner.privateKey });
+  await mockSignedIn(page, owner.address);
+  await mockPublicConfig(page, e2eChain());
+  await mockAccountApi(page, owner.address, { registered: owner.executor });
+  await page.goto(path);
+  if (connect) await page.getByRole('button', { name: 'Connect wallet' }).click();
+  return { owner, wallet };
 }
 
 const THIRTY_DAYS = '2592000';

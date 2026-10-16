@@ -30,4 +30,6 @@ export function fundGas(options: {
   rpc: string;
   addresses: readonly string[];
   ether?: string;
+  /** Dev account index that pays; use a different one per parallel caller. */
+  funder?: number;
 }): Promise<void>;

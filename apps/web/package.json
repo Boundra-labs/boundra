@@ -9,6 +9,7 @@
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
+    "@boundra/chain": "workspace:*",
     "@boundra/shared": "workspace:*",
     "@tanstack/react-query": "5.104.2",
     "dotenv": "18.0.8",
