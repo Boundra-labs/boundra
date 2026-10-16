@@ -32,10 +32,13 @@ corepack pnpm@10.32.1 dev
 | Service                    | Local URL                                 |
 | -------------------------- | ----------------------------------------- |
 | Web                        | http://localhost:3000                     |
+| Owner app (sign-in)        | http://localhost:3000/app                 |
 | API liveness               | http://127.0.0.1:3001/api/v1/health/live  |
 | API readiness              | http://127.0.0.1:3001/api/v1/health/ready |
 | OpenAPI (development only) | http://127.0.0.1:3001/api/docs            |
 | Web dependency status      | http://localhost:3000/status              |
+
+Open the web app at the exact origin in `WEB_ORIGIN` (default `http://localhost:3000`). Sign-in messages are bound to that origin, so the app refuses to sign in from `http://127.0.0.1:3000` and links to the right address instead. The web app forwards `/api/v1/*` to `API_INTERNAL_URL`, so the browser only ever talks to one origin.
 
 The worker starts independently and reports its mode in the heartbeat: `observe_only` without a reviewed deployment manifest, `monitor_only` when signing is not fully configured, and `execute` only when `EXECUTION_ENABLED=true`, an operator key, `ATTEMPT_ENCRYPTION_KEY` and gas caps are set and the deployment verifies. Readiness reports `executionEnabled` accordingly.
 
