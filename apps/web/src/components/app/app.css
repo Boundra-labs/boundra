@@ -1,0 +1,207 @@
+/* ---------- Owner app shell ---------- */
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background:
+    radial-gradient(1200px 520px at 85% -10%, rgba(155, 175, 141, 0.28), transparent 70%),
+    var(--ivory);
+}
+.app-header {
+  border-bottom: 1px solid var(--line);
+  background: rgba(252, 253, 249, 0.86);
+  backdrop-filter: blur(10px);
+}
+.app-header-inner {
+  max-width: 1120px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 24px;
+}
+.app-account {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.app-account-address {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.app-main {
+  flex: 1;
+  width: 100%;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 56px 24px 72px;
+}
+.app-footer {
+  max-width: 1120px;
+  width: 100%;
+  margin: 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 28px;
+  padding: 20px 24px 28px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* ---------- Access gate ---------- */
+.gate-card {
+  max-width: 620px;
+  margin: 0 auto;
+  padding: 40px;
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+.gate-eyebrow {
+  margin: 0 0 12px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--green);
+}
+.gate-title {
+  margin: 0;
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: clamp(32px, 4vw, 42px);
+  line-height: 1.08;
+  letter-spacing: -0.01em;
+}
+.gate-lede {
+  margin: 14px 0 0;
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.gate-card > .button {
+  margin-top: 24px;
+}
+.gate-loading {
+  max-width: 620px;
+  margin: 0 auto;
+  padding: 40px;
+  text-align: center;
+  color: var(--muted);
+}
+.gate-steps {
+  list-style: none;
+  margin: 32px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.gate-step {
+  position: relative;
+  display: grid;
+  grid-template-columns: 36px 1fr;
+  gap: 16px;
+  padding: 14px 0;
+}
+/* The connector between step marks echoes the homepage ribbon. */
+.gate-step:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: 17px;
+  top: 52px;
+  bottom: -10px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--line);
+}
+.gate-step.is-done:not(:last-child)::after {
+  background: var(--sage);
+}
+.gate-step-mark {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--muted);
+  background: var(--ivory);
+}
+.gate-step.is-active .gate-step-mark {
+  border-color: var(--forest);
+  background: var(--forest);
+  color: var(--ivory);
+}
+.gate-step.is-done .gate-step-mark {
+  border-color: var(--sage);
+  background: var(--sage-soft);
+  color: var(--green);
+}
+.gate-step-title {
+  margin: 6px 0 0;
+  font-size: 17px;
+  font-weight: 700;
+}
+.gate-step.is-upcoming .gate-step-title {
+  color: var(--muted);
+  font-weight: 600;
+}
+.gate-step-body p {
+  margin: 8px 0 0;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+.gate-step-body .button {
+  margin-top: 16px;
+}
+.gate-problem {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--amber-soft);
+  color: var(--amber-ink);
+}
+.gate-step-body .gate-problem,
+.gate-card > .gate-problem {
+  margin: 14px 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.gate-problem a {
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+@media (max-width: 760px) {
+  .app-header-inner {
+    padding: 12px 16px;
+    gap: 10px;
+  }
+  .app-account .button {
+    padding: 10px 14px;
+  }
+  .app-main {
+    padding: 28px 16px 48px;
+  }
+  .gate-card {
+    padding: 28px 20px;
+    border-radius: 22px;
+  }
+  .app-footer {
+    padding: 18px 16px 24px;
+  }
+}
+@media (max-width: 480px) {
+  .app-account-address {
+    display: none;
+  }
+}

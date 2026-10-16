@@ -136,19 +136,6 @@ button {
   background-size: 100% 1.5px;
 }
 
-.wallet-area {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-}
-.wallet-note {
-  max-width: 300px;
-  font-size: 13px;
-  color: var(--muted);
-}
-
 .status-dot {
   display: inline-block;
   width: 8px;
@@ -172,4 +159,48 @@ button {
   .shell {
     padding: 0 20px;
   }
+}
+
+/* ---------- Brand ---------- */
+.wordmark {
+  font-weight: 800;
+  font-size: 30px;
+  letter-spacing: -0.05em;
+  line-height: 1;
+}
+.wordmark-sm {
+  font-size: 22px;
+}
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.brand-mark {
+  flex: none;
+  width: 34px;
+  height: 34px;
+}
+.brand-sm {
+  gap: 8px;
+}
+.brand-sm .brand-mark {
+  width: 26px;
+  height: 26px;
+}
+.testnet-badge {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--lime-soft);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }

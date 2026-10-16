@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('prototype makes its scope explicit and handles a missing wallet', async ({ page }) => {
+test('prototype makes its scope explicit', async ({ page }) => {
   await page.goto('/');
   await expect(
     page.getByRole('heading', { level: 1, name: /Autonomy that knows where to stop/ }),
@@ -9,8 +9,7 @@ test('prototype makes its scope explicit and handles a missing wallet', async ({
   await expect(
     page.getByText(/Connecting a wallet does not authorize asset movement/),
   ).toBeAttached();
-  await page.getByRole('banner').getByRole('button', { name: 'Connect wallet' }).click();
-  await expect(page.getByRole('alert').filter({ hasText: 'Could not connect' })).toBeVisible();
+  await expect(page.getByText(/Signing in only identifies your wallet/)).toBeAttached();
 });
 
 test('the intent field says plainly that nothing is sent yet', async ({ page }) => {

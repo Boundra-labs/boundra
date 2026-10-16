@@ -164,33 +164,6 @@
   line-height: 1.6;
   color: var(--muted);
 }
-.wordmark {
-  font-weight: 800;
-  font-size: 30px;
-  letter-spacing: -0.05em;
-  line-height: 1;
-}
-.wordmark-sm {
-  font-size: 22px;
-}
-.brand {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-}
-.brand-mark {
-  flex: none;
-  width: 34px;
-  height: 34px;
-}
-.brand-sm {
-  gap: 8px;
-}
-.brand-sm .brand-mark {
-  width: 26px;
-  height: 26px;
-}
-
 /* ---------- Navigation ---------- */
 .nav {
   position: fixed;
@@ -222,14 +195,6 @@
   box-shadow: 0 12px 40px -22px rgba(18, 45, 39, 0.45);
   backdrop-filter: blur(14px);
 }
-.testnet-badge {
-  padding: 6px 12px;
-  border-radius: 999px;
-  background: var(--lime-soft);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-}
 .nav-links {
   display: flex;
   gap: 8px;
@@ -257,19 +222,6 @@
 .nav-links a:hover::after,
 .nav-links a[aria-current]::after {
   transform: scaleX(1);
-}
-.nav-wallet .wallet-note {
-  position: absolute;
-  top: calc(100% + 10px);
-  right: 0;
-  width: 260px;
-  padding: 10px 14px;
-  border-radius: 12px;
-  background: var(--surface);
-  box-shadow: var(--shadow-soft);
-}
-.nav-wallet .wallet-area {
-  align-items: flex-end;
 }
 .nav-toggle {
   display: none;

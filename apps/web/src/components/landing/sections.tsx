@@ -1,7 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { BrandMark } from '@/components/brand-mark';
 import { ServiceStatus } from '@/components/service-status';
-import { WalletButton } from '@/components/wallet-button';
 import { ClarifyBranch } from './clarify-branch';
 import { EvidenceTrace } from './evidence-trace';
 import {
@@ -53,7 +52,7 @@ export function Hero() {
             Keep the authority.
           </p>
           <div className="hero-actions">
-            <a className="button button-lg" href="#intent">
+            <a className="button button-lg" href="/app">
               Create your mandate <ArrowRight className="button-arrow" />
             </a>
             <a className="link-arrow" href="#journey">
@@ -356,9 +355,11 @@ export function Closing() {
           <p className="lede">
             Turn your intent into a clear mandate and keep autonomous actions on rails.
           </p>
-          <WalletButton />
+          <a className="button button-lg" href="/app">
+            Open the app <ArrowRight className="button-arrow" />
+          </a>
           <p className="closing-note">
-            <Alert /> Connecting only identifies your wallet. It never approves a mandate or moves
+            <Alert /> Signing in only identifies your wallet. It never approves a mandate or moves
             funds.
           </p>
         </div>

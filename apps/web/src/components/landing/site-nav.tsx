@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { BrandMark } from '@/components/brand-mark';
-import { WalletButton } from '@/components/wallet-button';
+import { ArrowRight } from './icons';
 
 const links = [
   { id: 'journey', label: 'How it works' },
@@ -62,7 +62,9 @@ export function SiteNav() {
           ))}
         </nav>
         <div className="nav-wallet">
-          <WalletButton />
+          <a className="button" href="/app">
+            Open app <ArrowRight className="button-arrow" />
+          </a>
         </div>
         <button
           type="button"
@@ -84,7 +86,9 @@ export function SiteNav() {
               </a>
             ))}
           </nav>
-          <WalletButton />
+          <a className="button" href="/app">
+            Open app <ArrowRight className="button-arrow" />
+          </a>
           <p className="mobile-menu-note">
             Base Sepolia · Mock assets only. Connecting a wallet does not authorize asset movement.
           </p>
