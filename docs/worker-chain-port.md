@@ -20,7 +20,7 @@ The heartbeat records the mode and API readiness reports `executionEnabled` only
 - `withSignerLease(key, work)` serializes all dispatches for `(chainId, operatorAddress)`. Use a renewable lease with monotonic fencing tokens; do not hold a database transaction open across RPC/LLM calls. `assertHeld()` rejects an expired/replaced lease.
 - `findAttempt(actionId)` returns the immutable action/request fingerprint, owner/executor, EOA nonce, exact signed raw transaction/hash, signed-at block and current state. Encrypt/restrict raw-transaction access and never log it.
 - `reserveEoaNonce(actionId, minimumPendingNonce, lease)` atomically persists an idempotent reservation. Ensure unique `(chainId, operator, eoaNonce)`. Reclaim abandoned unsigned reservations only after fencing the old owner and proving no signed attempt was persisted; otherwise reconcile before advancing.
-- `saveSignedAttempt(attempt, lease)` is atomic and fenced. Enforce unique action ID, immutable request hash, reserved EOA nonce, and unique `(chainId, executor, contractActionNonce)` even across mandate versions. It completes **before any network broadcast**.
+- `saveSignedAttempt(attempt, lease)` is atomic and fenced. Enforce unique action ID, immutable request hash, reserved EOA nonce, and a unique live `(chainId, executor, contractActionNonce)` even across mandate versions. A mined revert may release that contract nonce only after the configured reorg window. It completes **before any network broadcast**.
 - `reserveBroadcast(actionId, maxAttempts, minIntervalMs, lease)` atomically checks/increments persisted send count and timestamp. Maximum 3 sends, minimum 10 seconds apart, retained across restarts. Count the intent before network I/O so crashes cannot reset the budget.
 - `recordState` persists transitions and canonical receipt references using compare-and-set/fencing. Never discard an ambiguous signed attempt or allocate a new action/EOA nonce merely to get past an RPC timeout.
 
@@ -29,6 +29,8 @@ Person 2 must integration-test these constraints against real PostgreSQL, includ
 ## Recovery behavior
 
 Every retry checks receipts again, including previously confirmed/reverted receipts. Canonical hash, operator/from, executor/to, confirmation depth and exact `ActionExecuted` fields must agree. Reorg or missing/mismatched evidence stays RECONCILE.
+
+The scheduler re-enqueues terminal receipt checks for at least 20 blocks after inclusion. During the same window, a reverted attempt blocks a new signature for its unchanged executor contract nonce. Once the window passes, the partial unique index excludes `REVERTED`, so the next proposal can safely reuse that contract nonce with a fresh action ID and EOA nonce.
 
 If a receipt is explicitly not found, the service queries the known transaction. A known pending transaction is not resent. Only when transaction is also explicitly not found and both chain nonce observations show the reserved nonce is still available may the service validate stored signed calldata/fees, refresh policy, simulate again, and rebroadcast **identical bytes** under the persisted retry budget. Generic RPC errors are not treated as proof of absence.
 

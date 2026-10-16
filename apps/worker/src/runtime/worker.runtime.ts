@@ -46,6 +46,7 @@ export function buildWorker(
     reader: activation.reader,
     mode: activation.mode,
     actionDeadlineSeconds: config.ACTION_DEADLINE_SECONDS,
+    receiptReorgWindowBlocks: config.RECEIPT_REORG_WINDOW_BLOCKS,
     execution,
     monitor,
   });

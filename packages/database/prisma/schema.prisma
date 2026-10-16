@@ -353,7 +353,8 @@ model TransactionAttempt {
   createdAt          DateTime     @default(now()) @db.Timestamptz(3)
   updatedAt          DateTime     @updatedAt @db.Timestamptz(3)
 
-  @@unique([chainId, executor, contractNonce])
+  // PostgreSQL enforces this tuple only while the attempt can still become canonical.
+  // The partial unique index lives in the migration because Prisma cannot express its predicate.
 }
 
 model AttemptEvent {

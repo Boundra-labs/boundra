@@ -53,9 +53,10 @@ Kriteria:
 - [x] Aksi berbeda untuk satu operator mendapat EOA nonce berbeda; reservasi tanpa tanda tangan dari holder yang crash direklamasi, nonce tidak pernah ganda.
 - [x] Budget dan interval broadcast bertahan lintas instance store (restart).
 - [x] Crash setelah persist → restart mengirim byte identik, lalu `CONFIRMED` dari receipt kanonik tersimpan bersama block number/hash.
+- [x] Receipt terminal diperiksa ulang selama overlap minimal 20 blok; revert menahan contract nonce selama jendela itu lalu membebaskannya untuk proposal berikutnya.
 - [x] Job queue: claim paralel tidak tumpang tindih, job worker crash direklamasi, owner lama tidak bisa menyelesaikannya, retry habis → `FAILED`.
 - [x] Monitor: cursor compare-and-set, rescan overlap tidak menambah job, rewind meng-orphan event dan membatalkan job turunan, event yang kembali kanonik dievaluasi ulang; `RiskEventMonitor` asli lolos scan dan rewind di atas PostgreSQL.
-- [x] Tes integrasi: 17/17 lulus tiga kali berturut-turut (tes berbasis timing tidak flaky); unit worker 11/11; DB 5/5; lint, format, typecheck bersih.
+- [x] Tes integrasi worker: 28/28; unit worker 18/18; DB 5/5; lint, typecheck, seluruh unit test, dan build bersih.
 
 Catatan: `pnpm test:integration` di root kini menjalankan tes integrasi semua paket (`pnpm -r --if-present`).
 

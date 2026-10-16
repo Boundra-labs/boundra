@@ -30,6 +30,8 @@ export const JOB = {
 } as const;
 
 const ACTIVE_STATES = ['ACTION_PROPOSED', 'POLICY_CHECKED', 'BROADCAST', 'RECONCILE'] as const;
+const TERMINAL_ATTEMPT_STATES = ['CONFIRMED', 'REVERTED'] as const;
+const RECEIPT_TERMINAL_WORKFLOW_STATES = ['CONFIRMED', 'FAILED'] as const;
 const nowSeconds = () => BigInt(Math.floor(Date.now() / 1000));
 const exact = (value: { toFixed(d: number): string }) => BigInt(value.toFixed(0));
 type TransactionDecision = Extract<Decision, { kind: 'DEPOSIT' | 'WITHDRAW' }>;
@@ -43,6 +45,8 @@ export interface OrchestratorDeps {
   reader: BoundraChainReader;
   mode: WorkerMode;
   actionDeadlineSeconds: number;
+  /** Terminal receipts remain eligible for canonicality checks for this many blocks. */
+  receiptReorgWindowBlocks?: number;
   /** Present only in execute mode. */
   execution?: { service: OperatorExecutionService; store: ExecutionStore; operator: Address };
   monitor?: RiskEventMonitor;
@@ -77,6 +81,32 @@ export class Orchestrator {
 
   private loadMandate(id: string) {
     return this.db.mandate.findUnique({ where: { id }, include: { executor: true, owner: true } });
+  }
+
+  private get receiptReorgWindowBlocks() {
+    return BigInt(this.deps.receiptReorgWindowBlocks ?? 20);
+  }
+
+  private receiptWindowStart(head: bigint) {
+    const history = this.receiptReorgWindowBlocks - 1n;
+    return head > history ? head - history : 0n;
+  }
+
+  private findRecentTerminalAttempt(executor: string, contractNonce: bigint, head: bigint) {
+    return this.db.transactionAttempt.findFirst({
+      where: {
+        chainId: 84532,
+        executor: executor.toLowerCase(),
+        contractNonce: contractNonce.toString(),
+        state: { in: [...TERMINAL_ATTEMPT_STATES] },
+        receiptBlockNumber: {
+          gte: this.receiptWindowStart(head).toString(),
+          lte: head.toString(),
+        },
+      },
+      orderBy: { receiptBlockNumber: 'desc' },
+      select: { actionId: true },
+    });
   }
 
   /**
@@ -166,6 +196,18 @@ export class Orchestrator {
       getAddress(m.owner.address),
       getAddress(m.executor.address),
     );
+    // A reverted receipt frees the contract nonce only after the reorg window. Until then,
+    // keep checking the old receipt rather than signing a competing attempt for the same nonce.
+    const recentTerminal = await this.findRecentTerminalAttempt(
+      m.executor.address,
+      s.nextActionNonce,
+      s.blockNumber,
+    );
+    if (recentTerminal) {
+      if (this.deps.mode === 'execute')
+        await this.enqueueReconcile(this.db, recentTerminal.actionId);
+      return 'BUSY';
+    }
     const limits = this.limitsOf(m);
     const now = nowSeconds();
     const status = mandateStatus(s, limits, now);
@@ -373,9 +415,18 @@ export class Orchestrator {
       where: { actionId },
       include: { mandate: { include: { executor: true, owner: true } } },
     });
-    if (!p || !(ACTIVE_STATES as readonly string[]).includes(p.state)) return 'SKIPPED';
+    if (!p) return 'SKIPPED';
     const execution = this.deps.execution;
     if (!execution) return 'EXECUTION_DISABLED';
+    const active = (ACTIVE_STATES as readonly string[]).includes(p.state);
+    const receiptTerminal =
+      (RECEIPT_TERMINAL_WORKFLOW_STATES as readonly string[]).includes(p.state) &&
+      (p.state === 'CONFIRMED' || p.rejectionCode === 'REVERTED');
+    if (!active && !receiptTerminal) return 'SKIPPED';
+    const terminalAttempt = receiptTerminal
+      ? await execution.store.findAttempt(actionId as Hash)
+      : null;
+    if (receiptTerminal && !terminalAttempt) return 'SKIPPED';
     const m = p.mandate;
     const owner = getAddress(m.owner.address);
     const executor = getAddress(p.executor);
@@ -383,7 +434,7 @@ export class Orchestrator {
     try {
       state = await execution.service.execute(owner, executor, p.envelope);
     } catch (error) {
-      const attempt = await execution.store.findAttempt(actionId as Hash);
+      const attempt = terminalAttempt ?? (await execution.store.findAttempt(actionId as Hash));
       if (error instanceof ChainPolicyError && !attempt) {
         // Nothing was signed: the action is rejected with the guard's reason.
         await this.db.$transaction(async (tx) => {
@@ -423,7 +474,7 @@ export class Orchestrator {
       // A signed attempt exists: keep reconciling; never invent a replacement action.
       throw error;
     }
-    const attempt = await execution.store.findAttempt(actionId as Hash);
+    const attempt = terminalAttempt ?? (await execution.store.findAttempt(actionId as Hash));
     const txHash = attempt?.transactionHash.toLowerCase() ?? null;
     const workflow =
       state === 'CONFIRMED'
@@ -436,7 +487,10 @@ export class Orchestrator {
     await this.db.$transaction(async (tx) => {
       const changed = await tx.actionProposal.updateMany({
         where: { actionId, state: { not: workflow } },
-        data: { state: workflow, ...(workflow === 'FAILED' ? { rejectionCode: 'REVERTED' } : {}) },
+        data: {
+          state: workflow,
+          rejectionCode: workflow === 'FAILED' ? 'REVERTED' : null,
+        },
       });
       if (changed.count === 1)
         await this.activity(
@@ -553,6 +607,20 @@ export class Orchestrator {
         select: { actionId: true },
       });
       for (const { actionId } of open) await this.enqueueReconcile(this.db, actionId);
+      // CONFIRMED/REVERTED is an application observation, not economic finality. Re-run the
+      // receipt verifier throughout the configured overlap so reorgs restore RECONCILE.
+      const head = await this.deps.reader.client.getBlockNumber({ cacheTime: 0 });
+      const recentTerminal = await this.db.transactionAttempt.findMany({
+        where: {
+          state: { in: [...TERMINAL_ATTEMPT_STATES] },
+          receiptBlockNumber: {
+            gte: this.receiptWindowStart(head).toString(),
+            lte: head.toString(),
+          },
+        },
+        select: { actionId: true },
+      });
+      for (const { actionId } of recentTerminal) await this.enqueueReconcile(this.db, actionId);
     }
   }
 

@@ -337,6 +337,96 @@ describe('agent loop', () => {
     assert.equal(await w.orchestrator.evaluateMandate(w.draft.id, 'tick'), 'PROPOSED');
   });
 
+  test('a reverted attempt holds its contract nonce through the reorg window, then releases it', async () => {
+    const w = await authorized();
+    assert.equal(await w.orchestrator.evaluateMandate(w.draft.id, 'tick'), 'PROPOSED');
+    const [first] = await w.proposals();
+    assert.equal(await w.orchestrator.executeAction(first!.actionId, false), 'BROADCAST');
+
+    const attempt = await db.transactionAttempt.findUniqueOrThrow({
+      where: { actionId: first!.actionId },
+    });
+    w.chain.mempool.delete(attempt.txHash as Hex);
+    w.chain.state.confirmedNonce = 8;
+    w.chain.state.pendingNonce = 8;
+    await db.transactionAttempt.update({
+      where: { actionId: first!.actionId },
+      data: {
+        state: 'REVERTED',
+        receiptBlockNumber: '100',
+        receiptBlockHash: w.snapshot.blockHash.toLowerCase(),
+      },
+    });
+    await db.actionProposal.update({
+      where: { actionId: first!.actionId },
+      data: { state: 'FAILED', rejectionCode: 'REVERTED' },
+    });
+
+    w.snapshot.blockNumber = 119n;
+    assert.equal(await w.orchestrator.evaluateMandate(w.draft.id, 'tick'), 'BUSY');
+    assert.equal((await w.proposals()).length, 1);
+
+    w.snapshot.blockNumber = 120n;
+    assert.equal(await w.orchestrator.evaluateMandate(w.draft.id, 'tick'), 'PROPOSED');
+    const second = (await w.proposals())[1]!;
+    assert.equal(second.contractNonce.toFixed(0), '0');
+    assert.equal(await w.orchestrator.executeAction(second.actionId, false), 'BROADCAST');
+    assert.equal(
+      await db.transactionAttempt.count({
+        where: { executor: w.snapshot.executor.toLowerCase(), contractNonce: '0' },
+      }),
+      2,
+    );
+  });
+
+  test('the scheduler rechecks terminal receipts and restores a reorged action to active state', async () => {
+    const w = await authorized();
+    assert.equal(await w.orchestrator.evaluateMandate(w.draft.id, 'tick'), 'PROPOSED');
+    const [deposit] = await w.proposals();
+    assert.equal(await w.orchestrator.executeAction(deposit!.actionId, false), 'BROADCAST');
+    w.chain.mine(w.chain.sent[0] as Hex);
+    assert.equal(await w.orchestrator.executeAction(deposit!.actionId, false), 'CONFIRMED');
+    const attempt = await db.transactionAttempt.findUniqueOrThrow({
+      where: { actionId: deposit!.actionId },
+    });
+
+    const reconcilePrefix = 'reconcile:' + deposit!.actionId + ':';
+    await db.job.deleteMany({ where: { key: { startsWith: reconcilePrefix } } });
+    await w.orchestrator.schedule(10_000);
+    assert.ok(
+      await db.job.findFirst({
+        where: {
+          kind: JOB.RECONCILE_ACTION,
+          key: { startsWith: reconcilePrefix },
+        },
+      }),
+    );
+
+    // Simulate the receipt and its state transition disappearing from the canonical chain.
+    w.chain.receipts.delete(attempt.txHash as Hex);
+    w.chain.mempool.delete(attempt.txHash as Hex);
+    w.chain.state.confirmedNonce = 7;
+    w.chain.state.pendingNonce = 7;
+    Object.assign(w.snapshot, {
+      nextActionNonce: 0n,
+      idleBalance: 300_000_000n,
+      cumulativeDeposited: 0n,
+      allocationCompleted: false,
+    });
+    Object.assign(w.snapshot.liquid, { principal: 0n, maxWithdraw: 0n });
+
+    assert.equal(await w.orchestrator.executeAction(deposit!.actionId, false), 'RECONCILE');
+    assert.equal(
+      (await db.actionProposal.findUniqueOrThrow({ where: { actionId: deposit!.actionId } })).state,
+      'RECONCILE',
+    );
+    assert.equal(
+      (await db.transactionAttempt.findUniqueOrThrow({ where: { actionId: deposit!.actionId } }))
+        .state,
+      'RECONCILE',
+    );
+  });
+
   test('a monitor-only worker records intent but never proposes a transaction', async () => {
     const w = await authorized('monitor_only');
     assert.equal(await w.orchestrator.evaluateMandate(w.draft.id, 'tick'), 'EXECUTION_DISABLED');

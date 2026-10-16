@@ -16,6 +16,8 @@ const schema = z.object({
   BASE_SEPOLIA_RPC_URL: z.url().default('https://sepolia.base.org'),
   DEPLOYMENT_MANIFEST_PATH: unset(z.string().min(1)),
   CHAIN_CONFIRMATIONS: z.coerce.number().int().min(1).max(100).default(5),
+  // Keep terminal receipts under reconciliation for at least the PRD's 20-block overlap.
+  RECEIPT_REORG_WINDOW_BLOCKS: z.coerce.number().int().min(20).max(10000).default(20),
   // Signing is opt-in. The operator key is read only here and never logged.
   EXECUTION_ENABLED: z
     .enum(['true', 'false'])
