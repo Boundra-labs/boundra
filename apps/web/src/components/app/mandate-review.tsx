@@ -18,6 +18,7 @@ import {
   type MandateView,
 } from '@/lib/mandates';
 import { useOwnerSession } from './access-gate';
+import { Authorize } from './authorize';
 import { shortAddress } from './format';
 
 const STATUS_TEXT: Record<string, string> = {
@@ -333,31 +334,6 @@ function Approve({ view }: { view: MandateView }) {
   );
 }
 
-/** After approval: what the owner signs next. Nothing is active until the chain confirms. */
-function NextSteps({ view }: { view: MandateView }) {
-  const amount = formatMockUsdc(view.tuple.allocationTarget);
-  return (
-    <div className="approve">
-      <h2 className="panel-heading">Next: authorize in your wallet</h2>
-      <p className="field-note">
-        You approved revision {view.revision}. The agent starts only after these three wallet
-        transactions are confirmed on chain.
-      </p>
-      <ol className="how-list">
-        <li>
-          <strong>Set the mandate</strong> on your executor, exactly as reviewed.
-        </li>
-        <li>
-          <strong>Allow</strong> your executor to take exactly {amount}.
-        </li>
-        <li>
-          <strong>Fund</strong> your executor with {amount}.
-        </li>
-      </ol>
-    </div>
-  );
-}
-
 export function MandateReview({ mandateId }: { mandateId: string }) {
   const mandate = useMandate(mandateId);
 
@@ -392,9 +368,17 @@ export function MandateReview({ mandateId }: { mandateId: string }) {
   return (
     <div className="flow">
       <section className="panel" aria-labelledby="mandate-heading">
-        <p className="gate-eyebrow">New mandate · Step 3 of 3 · Review</p>
+        <p className="gate-eyebrow">
+          {view.status === 'AUTHORIZED'
+            ? 'Active mandate · Base Sepolia testnet'
+            : `New mandate · Step 3 of 3 · ${view.status === 'APPROVED' ? 'Authorize' : 'Review'}`}
+        </p>
         <h1 id="mandate-heading" className="gate-title">
-          Review your mandate
+          {view.status === 'AUTHORIZED'
+            ? 'Your mandate'
+            : view.status === 'APPROVED'
+              ? 'Authorize your mandate'
+              : 'Review your mandate'}
         </h1>
         <p className="intent-meta">
           <span className={`pill ${view.status === 'SUPERSEDED' ? 'pill-warn' : 'pill-quiet'}`}>
@@ -435,11 +419,11 @@ export function MandateReview({ mandateId }: { mandateId: string }) {
         <p className="approve-amount">
           {p.amount.display}
           <small>
-            into {VAULTS[p.target.vault].name} · {lockupText(p.target.lockupSeconds)}
+            into {VAULTS[p.target.vault].name} · {VAULTS[p.target.vault].summary.toLowerCase()}
           </small>
         </p>
         {reviewable && <Approve view={view} />}
-        {view.status === 'APPROVED' && <NextSteps view={view} />}
+        {(view.status === 'APPROVED' || view.status === 'AUTHORIZED') && <Authorize view={view} />}
         {(reviewable || view.status === 'APPROVED') && <EditLimits view={view} />}
       </aside>
     </div>

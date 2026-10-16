@@ -1,5 +1,6 @@
 'use client';
 
+import type { MandateTuple } from '@boundra/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from './api';
 import type { VaultKey } from './intents';
@@ -7,20 +8,7 @@ import type { VaultKey } from './intents';
 export type MandateStatus =
   'PREVIEWED' | 'APPROVED' | 'AUTHORIZED' | 'SUPERSEDED' | 'REVOKED' | 'EXPIRED' | (string & {});
 
-export interface MandateTuple {
-  chainId: number;
-  asset: `0x${string}`;
-  operator: `0x${string}`;
-  beneficiary: `0x${string}`;
-  expiresAt: string;
-  allowedVaults: number;
-  allowedActions: number;
-  maxLockupSeconds: string;
-  maxDepositPerAction: string;
-  maxCumulativeDeposits: string;
-  maxWithdrawPerAction: string;
-  allocationTarget: string;
-}
+export type { MandateTuple };
 
 /** The structured preview the owner approves; its hash binds the approval to these values. */
 export interface MandatePreview {
@@ -103,11 +91,13 @@ export const expiryBounds = (lockupSeconds: string) => ({
 
 const mandateKey = (id: string) => ['mandate', id] as const;
 
-export function useMandate(id: string) {
+/** `poll` re-reads every few seconds, e.g. while the worker verifies an approved mandate. */
+export function useMandate(id: string, { poll = false }: { poll?: boolean } = {}) {
   return useQuery({
     queryKey: mandateKey(id),
     queryFn: () => api<MandateView>(`mandate-drafts/${encodeURIComponent(id)}`),
     retry: (count, error) => count < 1 && !(error instanceof ApiError && error.status < 500),
+    refetchInterval: poll ? 3000 : false,
   });
 }
 

@@ -3,7 +3,10 @@ import { join } from 'node:path';
 import {
   createPublicClient,
   createWalletClient,
+  encodeAbiParameters,
+  getAddress,
   http,
+  keccak256,
   parseAbi,
   zeroAddress,
   type Address,
@@ -39,8 +42,109 @@ const abi = parseAbi([
   'function createExecutor() returns (address)',
   'function executorOf(address owner) view returns (address)',
   'function transfer(address to, uint256 amount) returns (bool)',
+  'function approve(address spender, uint256 amount) returns (bool)',
   'function balanceOf(address owner) view returns (uint256)',
+  'struct Mandate { uint256 chainId; address asset; address operator; address beneficiary; uint64 expiresAt; uint8 allowedVaults; uint8 allowedActions; uint32 maxLockupSeconds; uint256 maxDepositPerAction; uint256 maxCumulativeDeposits; uint256 maxWithdrawPerAction; uint256 allocationTarget; }',
+  'function setMandate(Mandate next)',
+  'function mandate() view returns (Mandate)',
+  'function mandateVersion() view returns (uint256)',
 ]);
+
+/** The API's wire tuple: integers as base-10 strings. */
+export interface WireMandate {
+  chainId: number;
+  asset: string;
+  operator: string;
+  beneficiary: string;
+  expiresAt: string;
+  allowedVaults: number;
+  allowedActions: number;
+  maxLockupSeconds: string;
+  maxDepositPerAction: string;
+  maxCumulativeDeposits: string;
+  maxWithdrawPerAction: string;
+  allocationTarget: string;
+}
+
+/** Same conversion as @boundra/chain's toMandateStruct. */
+export const mandateStruct = (t: WireMandate) => ({
+  chainId: BigInt(t.chainId),
+  asset: getAddress(t.asset),
+  operator: getAddress(t.operator),
+  beneficiary: getAddress(t.beneficiary),
+  expiresAt: BigInt(t.expiresAt),
+  allowedVaults: t.allowedVaults,
+  allowedActions: t.allowedActions,
+  maxLockupSeconds: Number(t.maxLockupSeconds),
+  maxDepositPerAction: BigInt(t.maxDepositPerAction),
+  maxCumulativeDeposits: BigInt(t.maxCumulativeDeposits),
+  maxWithdrawPerAction: BigInt(t.maxWithdrawPerAction),
+  allocationTarget: BigInt(t.allocationTarget),
+});
+
+/** `keccak256(abi.encode(mandate))`, as the executor emits and the API records at approval. */
+export const hashWireMandate = (t: WireMandate) =>
+  keccak256(
+    encodeAbiParameters(
+      [
+        {
+          type: 'tuple',
+          components: [
+            { name: 'chainId', type: 'uint256' },
+            { name: 'asset', type: 'address' },
+            { name: 'operator', type: 'address' },
+            { name: 'beneficiary', type: 'address' },
+            { name: 'expiresAt', type: 'uint64' },
+            { name: 'allowedVaults', type: 'uint8' },
+            { name: 'allowedActions', type: 'uint8' },
+            { name: 'maxLockupSeconds', type: 'uint32' },
+            { name: 'maxDepositPerAction', type: 'uint256' },
+            { name: 'maxCumulativeDeposits', type: 'uint256' },
+            { name: 'maxWithdrawPerAction', type: 'uint256' },
+            { name: 'allocationTarget', type: 'uint256' },
+          ],
+        },
+      ],
+      [mandateStruct(t)],
+    ),
+  );
+
+/** Whether the executor currently holds exactly this mandate (what the worker verifies). */
+export async function executorHolds(executor: Address, t: WireMandate) {
+  const client = chainClient();
+  const version = await client.readContract({
+    address: executor,
+    abi,
+    functionName: 'mandateVersion',
+  });
+  if (version === 0n) return false;
+  const onchain = await client.readContract({ address: executor, abi, functionName: 'mandate' });
+  return (
+    hashWireMandate({
+      ...t,
+      asset: onchain.asset,
+      operator: onchain.operator,
+      beneficiary: onchain.beneficiary,
+      expiresAt: onchain.expiresAt.toString(),
+      allowedVaults: onchain.allowedVaults,
+      allowedActions: onchain.allowedActions,
+      maxLockupSeconds: String(onchain.maxLockupSeconds),
+      maxDepositPerAction: onchain.maxDepositPerAction.toString(),
+      maxCumulativeDeposits: onchain.maxCumulativeDeposits.toString(),
+      maxWithdrawPerAction: onchain.maxWithdrawPerAction.toString(),
+      allocationTarget: onchain.allocationTarget.toString(),
+    }) === hashWireMandate(t)
+  );
+}
+
+export async function tokenBalance(owner: Address) {
+  return chainClient().readContract({
+    address: e2eChain().manifest.mockUsdc,
+    abi,
+    functionName: 'balanceOf',
+    args: [owner],
+  });
+}
 
 export async function executorOf(owner: Address): Promise<Address | null> {
   const executor = await chainClient().readContract({
@@ -74,10 +178,29 @@ export async function prepareOwner({
     });
   if (claim) await send(manifest.faucet, 'claim');
   if (executor) await send(manifest.factory, 'createExecutor');
+  const executorAddress = executor ? await executorOf(account.address) : null;
+  const write = async (request: Parameters<typeof wallet.writeContract>[0]) =>
+    client.waitForTransactionReceipt({ hash: await wallet.writeContract(request) });
   return {
     privateKey,
     address: account.address,
-    executor: executor ? await executorOf(account.address) : null,
+    executor: executorAddress,
+    /** Sets a mandate on the executor directly from the owner's key (an earlier session). */
+    setMandate: (t: WireMandate) =>
+      write({
+        address: executorAddress!,
+        abi,
+        functionName: 'setMandate',
+        args: [mandateStruct(t)],
+      } as never),
+    /** Approves the executor for `amount` MockUSDC directly from the owner's key. */
+    approve: (amount: bigint) =>
+      write({
+        address: manifest.mockUsdc,
+        abi,
+        functionName: 'approve',
+        args: [executorAddress!, amount],
+      } as never),
     /** Moves all MockUSDC out of the wallet (to the deployer), keeping the faucet cooldown. */
     emptyWallet: async () => {
       const balance = await client.readContract({

@@ -1,6 +1,6 @@
 import type { Page, Route } from '@playwright/test';
 import { keccak256, stringToHex, type Address } from 'viem';
-import { e2eChain } from './chain';
+import { e2eChain, executorHolds, hashWireMandate } from './chain';
 
 type Vault = 'LIQUID' | 'TIMED';
 const DAY = 86_400;
@@ -13,7 +13,7 @@ interface Draft {
   id: string;
   intentId: string;
   revision: number;
-  status: 'PREVIEWED' | 'APPROVED' | 'SUPERSEDED';
+  status: 'PREVIEWED' | 'APPROVED' | 'AUTHORIZED' | 'SUPERSEDED';
   vault: Vault;
   amount: bigint;
   expiresAt: number;
@@ -47,6 +47,7 @@ export async function mockMandates(
   const drafts = new Map<string, Draft>();
   let escalate = false;
   let stale = false;
+  let tamperHash = false;
 
   const view = (d: Draft) => {
     const v = VAULTS[d.vault];
@@ -120,29 +121,39 @@ export async function mockMandates(
       revision: d.revision,
       status: d.status,
       executor: executor.toLowerCase(),
-      tuple: {
-        chainId: 84532,
-        asset: manifest.mockUsdc.toLowerCase(),
-        operator: operator.toLowerCase(),
-        beneficiary: owner.toLowerCase(),
-        expiresAt: String(d.expiresAt),
-        allowedVaults: v.mask,
-        allowedActions: 3,
-        maxLockupSeconds: String(v.lockup),
-        maxDepositPerAction: d.maxDepositPerAction.toString(),
-        maxCumulativeDeposits: d.amount.toString(),
-        maxWithdrawPerAction: d.maxWithdrawPerAction.toString(),
-        allocationTarget: d.amount.toString(),
-      },
+      tuple: tupleOf(d),
       preview,
       previewHash: keccak256(stringToHex(JSON.stringify(preview))),
-      mandateHash: d.status === 'APPROVED' ? keccak256(stringToHex(`mandate:${d.id}`)) : null,
-      approvedAt: d.status === 'APPROVED' ? new Date().toISOString() : null,
-      authorizedAt: null,
-      onchainVersion: null,
+      mandateHash:
+        d.status === 'APPROVED' || d.status === 'AUTHORIZED'
+          ? tamperHash
+            ? keccak256(stringToHex('not the approved mandate'))
+            : hashWireMandate(tupleOf(d))
+          : null,
+      approvedAt: d.status === 'PREVIEWED' ? null : new Date().toISOString(),
+      authorizedAt: d.status === 'AUTHORIZED' ? new Date().toISOString() : null,
+      onchainVersion: d.status === 'AUTHORIZED' ? '1' : null,
       authorizationTxHash: null,
       fundedAtBlock: null,
       escalationReason: null,
+    };
+  };
+
+  const tupleOf = (d: Draft) => {
+    const v = VAULTS[d.vault];
+    return {
+      chainId: 84532 as const,
+      asset: manifest.mockUsdc.toLowerCase(),
+      operator: operator.toLowerCase(),
+      beneficiary: owner.toLowerCase(),
+      expiresAt: String(d.expiresAt),
+      allowedVaults: v.mask,
+      allowedActions: 3,
+      maxLockupSeconds: String(v.lockup),
+      maxDepositPerAction: d.maxDepositPerAction.toString(),
+      maxCumulativeDeposits: d.amount.toString(),
+      maxWithdrawPerAction: d.maxWithdrawPerAction.toString(),
+      allocationTarget: d.amount.toString(),
     };
   };
 
@@ -230,13 +241,32 @@ export async function mockMandates(
     draft.status = 'APPROVED';
     return route.fulfill({ json: view(draft) });
   });
+  // Stands in for the worker: AUTHORIZED only when the executor holds exactly this mandate.
+  await page.route('**/api/v1/mandate-drafts/*/authorization-check', async (route) => {
+    const id = new URL(route.request().url()).pathname.split('/').at(-2)!;
+    const draft = drafts.get(id);
+    if (!draft) return fail(route, 404, 'NOT_FOUND', 'Mandate not found');
+    if (draft.status === 'APPROVED' && (await executorHolds(executor, tupleOf(draft))))
+      draft.status = 'AUTHORIZED';
+    return route.fulfill({ status: 202, json: { status: 'PENDING_VERIFICATION' } });
+  });
 
   return {
     /** A draft that already exists for an intent, as if created earlier. */
-    seed: (intentId = crypto.randomUUID()) => {
+    seed: (
+      { status = 'PREVIEWED' }: { status?: 'PREVIEWED' | 'APPROVED' } = {},
+      intentId = crypto.randomUUID(),
+    ) => {
       const result = build(intentId, {});
       if (typeof result === 'string') throw new Error(result);
+      result.status = status;
       return result.id;
+    },
+    /** The exact tuple of a draft, as the owner would sign it. */
+    tuple: (id: string) => tupleOf(drafts.get(id)!),
+    /** The API reports a different mandate hash than the tuple it serves. */
+    tamperMandateHash: () => {
+      tamperHash = true;
     },
     status: (id: string) => drafts.get(id)?.status,
     escalateNextDraft: () => {

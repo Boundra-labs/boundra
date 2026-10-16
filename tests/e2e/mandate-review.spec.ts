@@ -62,7 +62,7 @@ test('a clarified goal becomes a draft with every field to review, approved only
     .getByRole('checkbox', { name: /I reviewed the vault, limits, expiry and notices/ })
     .check();
   await approve.click();
-  await expect(page.getByRole('heading', { name: 'Next: authorize in your wallet' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Authorize in your wallet' })).toBeVisible();
   await expect(page.getByText('Approved · not yet authorized')).toBeVisible();
 });
 
@@ -118,7 +118,7 @@ test('editing an approved revision warns that approval starts over', async ({ pa
   await openSeededDraft(page, 'LIQUID');
   await page.getByRole('checkbox').check();
   await page.getByRole('button', { name: 'Approve mandate' }).click();
-  await expect(page.getByRole('heading', { name: 'Next: authorize in your wallet' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Authorize in your wallet' })).toBeVisible();
   await page.getByText('Change expiry or per-action limits').click();
   await expect(page.getByText('This replaces the revision you approved.')).toBeVisible();
   await expect(page.getByLabel('Expires in (days)')).toHaveValue('7');
