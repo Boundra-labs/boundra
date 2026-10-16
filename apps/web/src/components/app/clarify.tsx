@@ -1,10 +1,12 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
 import { isApiError } from '@/lib/api';
 import { answerLabel, DIMENSION_TITLES, illustrativeYield, UNSURE, VAULTS } from '@/lib/acce-copy';
 import { useAnswer, useIntent, type ActiveQuestion, type IntentView } from '@/lib/intents';
+import { isEscalation, useCreateDraft } from '@/lib/mandates';
 import { useOwnerSession } from './access-gate';
 
 const STALE_NOTICE =
@@ -109,10 +111,61 @@ function Outcome({ intent }: { intent: IntentView }) {
         )}
         {intent.selection.reason}
       </p>
-      <p className="field-note">
-        Next, you review the exact mandate. Nothing is approved or funded until you sign it.
-      </p>
+      <ReviewButton intentId={intent.id} />
     </section>
+  );
+}
+
+function draftProblem(error: unknown) {
+  if (isApiError(error, 'EXECUTOR_NOT_REGISTERED'))
+    return (
+      <>
+        Your executor is not verified yet. <Link href="/app">Finish account setup</Link>, then come
+        back to this goal.
+      </>
+    );
+  if (isApiError(error))
+    return error.recovery ? `${error.message}. ${error.recovery}` : error.message;
+  return 'The mandate could not be drafted. Try again.';
+}
+
+/** Drafts the mandate from the finished clarification and opens its review. */
+function ReviewButton({ intentId }: { intentId: string }) {
+  const session = useOwnerSession();
+  const router = useRouter();
+  const draft = useCreateDraft(intentId, session.csrfToken);
+  const escalated = draft.data && isEscalation(draft.data) ? draft.data : null;
+  return (
+    <>
+      <p className="field-note">
+        Next, review the exact mandate. Drafting it approves nothing and moves no funds.
+      </p>
+      <button
+        className="button"
+        disabled={draft.isPending || (draft.isSuccess && !escalated)}
+        onClick={() =>
+          draft.mutate(undefined, {
+            onSuccess: (result) => {
+              if (!isEscalation(result)) router.push(`/app/mandates/${result.id}`);
+            },
+          })
+        }
+      >
+        {draft.isPending || (draft.isSuccess && !escalated)
+          ? 'Drafting your mandate…'
+          : 'Review the mandate'}
+      </button>
+      {escalated && (
+        <p role="alert" className="gate-problem">
+          {escalated.reason}
+        </p>
+      )}
+      {draft.isError && (
+        <p role="alert" className="gate-problem">
+          {draftProblem(draft.error)}
+        </p>
+      )}
+    </>
   );
 }
 
