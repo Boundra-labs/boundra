@@ -243,7 +243,37 @@ test('manifest rejects absent code pins, duplicate addresses and wrong chain', (
     { ...m, chainId: 1 },
     { ...m, liquidVault: m.factory },
     { ...m, factory: addr(0) },
+    // Valid EIP-55 is 0xcA11bde05977b3631167028862bE2a173976CA11.
+    { ...m, factory: '0xca11bde05977b3631167028862be2a173976ca11' },
+    { ...m, riskAdmin: '0xCA11bde05977b3631167028862bE2a173976CA11' },
   ]) {
     assert.equal(deploymentManifestSchema.safeParse(invalid).success, false);
   }
+});
+
+test('hashMandate matches the executor encoding pinned in Foundry MandateHash.t.sol', () => {
+  const { hashMandate, sameMandate, toMandateStruct } = chain;
+  const tuple = {
+    chainId: 84532,
+    asset: '0x3333333333333333333333333333333333333333',
+    operator: '0x2222222222222222222222222222222222222222',
+    beneficiary: '0x1111111111111111111111111111111111111111',
+    expiresAt: '1800604800',
+    allowedVaults: 2,
+    allowedActions: 3,
+    maxLockupSeconds: '2592000',
+    maxDepositPerAction: '100000000',
+    maxCumulativeDeposits: '300000000',
+    maxWithdrawPerAction: '200000000',
+    allocationTarget: '300000000',
+  };
+  assert.equal(
+    hashMandate(tuple),
+    '0x33b6cb5eb481c9a9b5424c7368387a9e7e6506531027456fec2e99aae241edaa',
+  );
+  const onchain = toMandateStruct(tuple);
+  assert.equal(sameMandate(onchain, tuple), true);
+  assert.equal(sameMandate({ ...onchain, expiresAt: onchain.expiresAt + 1n }, tuple), false);
+  assert.equal(sameMandate({ ...onchain, allowedVaults: 3 }, tuple), false);
+  assert.throws(() => hashMandate({ ...tuple, allowedVaults: 4 }));
 });

@@ -1,0 +1,22 @@
+{
+  "name": "@boundra/acce",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@boundra/shared": "workspace:*",
+    "viem": "2.57.7"
+  },
+  "devDependencies": {
+    "vitest": "5.0.4"
+  }
+}

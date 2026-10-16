@@ -12,6 +12,7 @@ export default tseslint.config(
       'contracts/out/**',
       'contracts/cache/**',
       'tmp/**',
+      'evaluation/reports/**',
       'playwright-report/**',
       'test-results/**',
       'apps/web/next-env.d.ts',
@@ -32,6 +33,36 @@ export default tseslint.config(
         setTimeout: 'readonly',
         AbortSignal: 'readonly',
       },
+    },
+  },
+  {
+    // Benchmark integrity (PRD §11.1): hidden persona labels must never reach mandate generators.
+    files: ['evaluation/src/baselines/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '../fixtures',
+              importNames: [
+                'Persona',
+                'HiddenPreferences',
+                'Fixture',
+                'loadFixture',
+                'fixtureSchema',
+              ],
+              message: 'Baselines may only use PublicPersona.',
+            },
+          ],
+          patterns: [
+            {
+              group: ['**/simulator', '**/runner/*'],
+              message: 'Hidden labels must not reach mandate generators.',
+            },
+          ],
+        },
+      ],
     },
   },
   {

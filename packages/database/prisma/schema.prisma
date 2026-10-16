@@ -8,6 +8,9 @@ datasource db {
   provider = "postgresql"
 }
 
+// Addresses are stored lowercase, hashes as 0x-prefixed lowercase hex and token amounts as
+// NUMERIC(78,0). CHECK constraints and partial unique indexes live in the migrations.
+
 enum WorkflowState {
   INTENT_RECEIVED
   CLARIFYING
@@ -30,17 +33,85 @@ enum JobStatus {
   FAILED
 }
 
+enum QuestionStatus {
+  PENDING
+  ANSWERED
+  UNKNOWN
+  ESCALATE
+}
+
+enum PreferenceSource {
+  INPUT
+  ANSWER
+  DEFAULT
+}
+
+enum WordingSource {
+  TEMPLATE
+  LLM
+}
+
+enum MandateStatus {
+  DRAFT
+  PREVIEWED
+  APPROVED
+  AUTHORIZED
+  SUPERSEDED
+  REVOKED
+  EXPIRED
+  REJECTED
+}
+
+enum DecisionKind {
+  DEPOSIT
+  WITHDRAW
+  HOLD
+  ESCALATE
+}
+
+enum ActionKind {
+  DEPOSIT
+  WITHDRAW
+}
+
+enum AttemptState {
+  SIGNED
+  BROADCAST
+  CONFIRMED
+  REVERTED
+  RECONCILE
+}
+
+enum NonceReservationStatus {
+  RESERVED
+  SIGNED
+  RELEASED
+}
+
+enum RiskEventStatus {
+  CANONICAL
+  ORPHANED
+}
+
 model WalletIdentity {
-  id           String         @id @default(uuid()) @db.Uuid
-  address      String         @unique @db.VarChar(42)
-  createdAt    DateTime       @default(now()) @db.Timestamptz(3)
+  id           String          @id @default(uuid()) @db.Uuid
+  address      String          @unique @db.VarChar(42)
+  createdAt    DateTime        @default(now()) @db.Timestamptz(3)
   intents      Intent[]
   authSessions AuthSession[]
+  executor     Executor?
+  mandates     Mandate[]
+  activity     ActivityEvent[]
 }
 
 model AuthChallenge {
   id         String    @id @default(uuid()) @db.Uuid
   nonceHash  String    @unique @db.VarChar(64)
+  address    String    @db.VarChar(42)
+  domain     String    @db.VarChar(255)
+  uri        String    @db.VarChar(2048)
+  chainId    Int
+  issuedAt   DateTime  @db.Timestamptz(3)
   expiresAt  DateTime  @db.Timestamptz(3)
   consumedAt DateTime? @db.Timestamptz(3)
   createdAt  DateTime  @default(now()) @db.Timestamptz(3)
@@ -49,45 +120,313 @@ model AuthChallenge {
 }
 
 model AuthSession {
-  id          String         @id @default(uuid()) @db.Uuid
-  tokenHash   String         @unique @db.VarChar(64)
-  ownerId     String         @db.Uuid
-  owner       WalletIdentity @relation(fields: [ownerId], references: [id])
-  expiresAt   DateTime       @db.Timestamptz(3)
-  revokedAt   DateTime?      @db.Timestamptz(3)
-  createdAt   DateTime       @default(now()) @db.Timestamptz(3)
+  id            String         @id @default(uuid()) @db.Uuid
+  tokenHash     String         @unique @db.VarChar(64)
+  csrfTokenHash String         @db.VarChar(64)
+  ownerId       String         @db.Uuid
+  owner         WalletIdentity @relation(fields: [ownerId], references: [id])
+  expiresAt     DateTime       @db.Timestamptz(3)
+  revokedAt     DateTime?      @db.Timestamptz(3)
+  lastSeenAt    DateTime       @default(now()) @db.Timestamptz(3)
+  createdAt     DateTime       @default(now()) @db.Timestamptz(3)
 
   @@index([ownerId, expiresAt])
 }
 
 model Intent {
-  id          String         @id @default(uuid()) @db.Uuid
-  ownerId     String         @db.Uuid
-  owner       WalletIdentity @relation(fields: [ownerId], references: [id])
-  objective   String         @db.VarChar(2000)
-  amount      Decimal        @db.Decimal(78, 0)
-  chainId     Int            @default(84532)
-  state       WorkflowState  @default(INTENT_RECEIVED)
-  preferences Json           @default("{}")
-  createdAt   DateTime       @default(now()) @db.Timestamptz(3)
-  updatedAt   DateTime       @updatedAt @db.Timestamptz(3)
+  id                String             @id @default(uuid()) @db.Uuid
+  ownerId           String             @db.Uuid
+  owner             WalletIdentity     @relation(fields: [ownerId], references: [id])
+  objective         String             @db.VarChar(2000)
+  amount            Decimal            @db.Decimal(78, 0)
+  chainId           Int                @default(84532)
+  state             WorkflowState      @default(INTENT_RECEIVED)
+  preferences       Json               @default("{}")
+  version           Int                @default(1)
+  descriptorVersion String             @default("v1") @db.VarChar(32)
+  acceConfigVersion String             @default("v1") @db.VarChar(32)
+  createdAt         DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime           @updatedAt @db.Timestamptz(3)
+  questions         Question[]
+  preferenceRecords PreferenceRecord[]
+  mandates          Mandate[]
 
   @@index([ownerId, createdAt])
 }
 
-// Durable job envelope only. Claim/lease processing is Person 2's next task.
+model Question {
+  id                 String         @id @default(uuid()) @db.Uuid
+  intentId           String         @db.Uuid
+  intent             Intent         @relation(fields: [intentId], references: [id])
+  questionId         String         @unique @db.VarChar(100)
+  order              Int
+  dimension          String         @db.VarChar(64)
+  alternatives       Json
+  actionDisagreement String         @db.VarChar(1000)
+  materiality        Int
+  uncertainty        Int
+  decisionFlip       Int
+  friction           Int
+  score              Int
+  text               String         @db.VarChar(1000)
+  wordingSource      WordingSource
+  answerId           String?        @db.VarChar(64)
+  status             QuestionStatus @default(PENDING)
+  askedAt            DateTime       @default(now()) @db.Timestamptz(3)
+  answeredAt         DateTime?      @db.Timestamptz(3)
+
+  @@unique([intentId, order])
+}
+
+model PreferenceRecord {
+  id        String           @id @default(uuid()) @db.Uuid
+  intentId  String           @db.Uuid
+  intent    Intent           @relation(fields: [intentId], references: [id])
+  dimension String           @db.VarChar(64)
+  value     Json
+  source    PreferenceSource
+  version   Int
+  createdAt DateTime         @default(now()) @db.Timestamptz(3)
+
+  @@unique([intentId, dimension, version])
+}
+
+model Executor {
+  id              String         @id @default(uuid()) @db.Uuid
+  ownerId         String         @unique @db.Uuid
+  owner           WalletIdentity @relation(fields: [ownerId], references: [id])
+  chainId         Int            @default(84532)
+  address         String         @unique @db.VarChar(42)
+  factory         String         @db.VarChar(42)
+  verifiedAtBlock Decimal        @db.Decimal(78, 0)
+  createdAt       DateTime       @default(now()) @db.Timestamptz(3)
+  mandates        Mandate[]
+}
+
+// One row per draft revision. The approved revision becomes AUTHORIZED only after the
+// on-chain mandate matches it exactly; older revisions are SUPERSEDED.
+model Mandate {
+  id                    String           @id @default(uuid()) @db.Uuid
+  intentId              String           @db.Uuid
+  intent                Intent           @relation(fields: [intentId], references: [id])
+  ownerId               String           @db.Uuid
+  owner                 WalletIdentity   @relation(fields: [ownerId], references: [id])
+  executorId            String?          @db.Uuid
+  executor              Executor?        @relation(fields: [executorId], references: [id])
+  revision              Int
+  status                MandateStatus    @default(DRAFT)
+  chainId               Int              @default(84532)
+  asset                 String           @db.VarChar(42)
+  operator              String           @db.VarChar(42)
+  beneficiary           String           @db.VarChar(42)
+  expiresAt             Decimal          @db.Decimal(78, 0)
+  allowedVaults         Int
+  allowedActions        Int
+  maxLockupSeconds      BigInt
+  maxDepositPerAction   Decimal          @db.Decimal(78, 0)
+  maxCumulativeDeposits Decimal          @db.Decimal(78, 0)
+  maxWithdrawPerAction  Decimal          @db.Decimal(78, 0)
+  allocationTarget      Decimal          @db.Decimal(78, 0)
+  selectedVault         String?          @db.VarChar(16)
+  preview               Json?
+  previewHash           String?          @db.VarChar(66)
+  mandateHash           String?          @db.VarChar(66)
+  approvedAt            DateTime?        @db.Timestamptz(3)
+  onchainVersion        Decimal?         @db.Decimal(78, 0)
+  authorizationTxHash   String?          @db.VarChar(66)
+  authorizedBlock       Decimal?         @db.Decimal(78, 0)
+  authorizedAt          DateTime?        @db.Timestamptz(3)
+  fundedAtBlock         Decimal?         @db.Decimal(78, 0)
+  escalatedAt           DateTime?        @db.Timestamptz(3)
+  escalationReason      String?          @db.VarChar(200)
+  createdAt             DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime         @updatedAt @db.Timestamptz(3)
+  decisions             Decision[]
+  actions               ActionProposal[]
+
+  @@unique([intentId, revision])
+  @@index([ownerId, createdAt])
+  @@index([status])
+}
+
+model Decision {
+  id                String          @id @default(uuid()) @db.Uuid
+  mandateId         String          @db.Uuid
+  mandate           Mandate         @relation(fields: [mandateId], references: [id])
+  kind              DecisionKind
+  trigger           String          @db.VarChar(64)
+  reasonCode        String          @db.VarChar(64)
+  reasonSummary     String          @db.VarChar(1000)
+  candidates        Json
+  snapshotBlock     Decimal         @db.Decimal(78, 0)
+  snapshotBlockHash String          @db.VarChar(66)
+  policyVersion     String          @db.VarChar(32)
+  createdAt         DateTime        @default(now()) @db.Timestamptz(3)
+  action            ActionProposal?
+
+  @@index([mandateId, createdAt])
+}
+
+model ActionProposal {
+  actionId       String        @id @db.VarChar(66)
+  decisionId     String        @unique @db.Uuid
+  decision       Decision      @relation(fields: [decisionId], references: [id])
+  mandateId      String        @db.Uuid
+  mandate        Mandate       @relation(fields: [mandateId], references: [id])
+  chainId        Int           @default(84532)
+  executor       String        @db.VarChar(42)
+  onchainVersion Decimal       @db.Decimal(78, 0)
+  contractNonce  Decimal       @db.Decimal(78, 0)
+  proposalSeq    Int
+  kind           ActionKind
+  target         String        @db.VarChar(42)
+  amount         Decimal       @db.Decimal(78, 0)
+  deadline       Decimal       @db.Decimal(78, 0)
+  envelope       Json
+  state          WorkflowState @default(ACTION_PROPOSED)
+  rejectionCode  String?       @db.VarChar(64)
+  createdAt      DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime      @updatedAt @db.Timestamptz(3)
+  policyChecks   PolicyCheck[]
+
+  @@unique([chainId, executor, contractNonce, proposalSeq])
+  @@index([mandateId, createdAt])
+}
+
+model PolicyCheck {
+  id              String         @id @default(uuid()) @db.Uuid
+  actionId        String         @db.VarChar(66)
+  action          ActionProposal @relation(fields: [actionId], references: [actionId])
+  verifierVersion String         @db.VarChar(32)
+  passed          Boolean
+  codes           String[]
+  results         Json
+  createdAt       DateTime       @default(now()) @db.Timestamptz(3)
+
+  @@index([actionId])
+}
+
+// Row-based lease with a monotonic fencing token; never held inside a database transaction.
+model Lease {
+  key          String   @id @db.VarChar(200)
+  holder       String   @db.VarChar(100)
+  fencingToken BigInt
+  expiresAt    DateTime @db.Timestamptz(3)
+}
+
+model EoaNonceReservation {
+  id           String                 @id @default(uuid()) @db.Uuid
+  chainId      Int
+  operator     String                 @db.VarChar(42)
+  eoaNonce     BigInt
+  actionId     String                 @unique @db.VarChar(66)
+  status       NonceReservationStatus @default(RESERVED)
+  fencingToken BigInt
+  createdAt    DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime               @updatedAt @db.Timestamptz(3)
+
+  @@index([chainId, operator, status])
+}
+
+// Signed operator transactions. Deliberately not foreign-keyed to ActionProposal so the
+// execution port stays independent of workflow tables; actionId is the logical link.
+model TransactionAttempt {
+  actionId           String       @id @db.VarChar(66)
+  chainId            Int
+  requestHash        String       @db.VarChar(66)
+  action             Json
+  owner              String       @db.VarChar(42)
+  executor           String       @db.VarChar(42)
+  operator           String       @db.VarChar(42)
+  eoaNonce           BigInt
+  contractNonce      Decimal      @db.Decimal(78, 0)
+  rawTxCiphertext    Bytes
+  txHash             String       @unique @db.VarChar(66)
+  signedAtBlock      Decimal      @db.Decimal(78, 0)
+  state              AttemptState
+  sendCount          Int          @default(0)
+  lastSendAt         DateTime?    @db.Timestamptz(3)
+  lastCode           String?      @db.VarChar(64)
+  receiptBlockNumber Decimal?     @db.Decimal(78, 0)
+  receiptBlockHash   String?      @db.VarChar(66)
+  fencingToken       BigInt
+  createdAt          DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime     @updatedAt @db.Timestamptz(3)
+
+  // PostgreSQL enforces this tuple only while the attempt can still become canonical.
+  // The partial unique index lives in the migration because Prisma cannot express its predicate.
+}
+
+model AttemptEvent {
+  id          BigInt       @id @default(autoincrement())
+  actionId    String       @db.VarChar(66)
+  state       AttemptState
+  code        String?      @db.VarChar(64)
+  blockNumber Decimal?     @db.Decimal(78, 0)
+  blockHash   String?      @db.VarChar(66)
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+
+  @@index([actionId, id])
+}
+
+model MonitorCursor {
+  key               String   @id @db.VarChar(200)
+  nextBlock         Decimal  @db.Decimal(78, 0)
+  previousBlockHash String?  @db.VarChar(66)
+  updatedAt         DateTime @updatedAt @db.Timestamptz(3)
+}
+
+model RiskEvent {
+  id                  String          @id @default(uuid()) @db.Uuid
+  chainId             Int
+  txHash              String          @db.VarChar(66)
+  logIndex            Int
+  blockNumber         Decimal         @db.Decimal(78, 0)
+  blockHash           String          @db.VarChar(66)
+  source              String          @db.VarChar(42)
+  eventRiskLevel      Int
+  eventCapacity       Decimal         @db.Decimal(78, 0)
+  observedAtBlock     Decimal         @db.Decimal(78, 0)
+  observedAtBlockHash String          @db.VarChar(66)
+  currentRiskLevel    Int
+  currentCapacity     Decimal         @db.Decimal(78, 0)
+  status              RiskEventStatus @default(CANONICAL)
+  createdAt           DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime        @updatedAt @db.Timestamptz(3)
+
+  @@unique([chainId, txHash, logIndex])
+  @@index([source, blockNumber])
+}
+
+model ActivityEvent {
+  id        BigInt         @id @default(autoincrement())
+  ownerId   String         @db.Uuid
+  owner     WalletIdentity @relation(fields: [ownerId], references: [id])
+  intentId  String?        @db.Uuid
+  mandateId String?        @db.Uuid
+  actionId  String?        @db.VarChar(66)
+  type      String         @db.VarChar(64)
+  payload   Json
+  txHash    String?        @db.VarChar(66)
+  createdAt DateTime       @default(now()) @db.Timestamptz(3)
+
+  @@index([ownerId, id])
+}
+
 model Job {
-  id         String    @id @default(uuid()) @db.Uuid
-  key        String    @unique @db.VarChar(200)
-  kind       String    @db.VarChar(100)
-  payload    Json
-  status     JobStatus @default(PENDING)
-  attempts   Int       @default(0)
-  availableAt DateTime @default(now()) @db.Timestamptz(3)
-  leaseUntil DateTime? @db.Timestamptz(3)
-  leaseOwner String?   @db.VarChar(100)
-  createdAt  DateTime  @default(now()) @db.Timestamptz(3)
-  updatedAt  DateTime  @updatedAt @db.Timestamptz(3)
+  id          String    @id @default(uuid()) @db.Uuid
+  key         String    @unique @db.VarChar(200)
+  kind        String    @db.VarChar(100)
+  payload     Json
+  status      JobStatus @default(PENDING)
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(5)
+  lastError   String?   @db.VarChar(500)
+  availableAt DateTime  @default(now()) @db.Timestamptz(3)
+  leaseUntil  DateTime? @db.Timestamptz(3)
+  leaseOwner  String?   @db.VarChar(100)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime  @updatedAt @db.Timestamptz(3)
 
   @@index([status, availableAt])
   @@index([status, leaseUntil])
@@ -97,4 +436,37 @@ model WorkerHeartbeat {
   id        String   @id @db.VarChar(100)
   mode      String   @db.VarChar(32)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
+}
+
+model EvaluationRun {
+  id             String                 @id @default(uuid()) @db.Uuid
+  method         String                 @db.VarChar(8)
+  split          String                 @db.VarChar(16)
+  fixtureVersion String                 @db.VarChar(64)
+  provider       String                 @db.VarChar(32)
+  model          String?                @db.VarChar(64)
+  promptVersion  String                 @db.VarChar(32)
+  configVersion  String                 @db.VarChar(32)
+  status         String                 @db.VarChar(16)
+  metrics        Json                   @default("{}")
+  startedAt      DateTime               @default(now()) @db.Timestamptz(3)
+  finishedAt     DateTime?              @db.Timestamptz(3)
+  cases          EvaluationCaseResult[]
+}
+
+model EvaluationCaseResult {
+  id           String        @id @default(uuid()) @db.Uuid
+  runId        String        @db.Uuid
+  run          EvaluationRun @relation(fields: [runId], references: [id])
+  personaId    String        @db.VarChar(64)
+  outcome      String        @db.VarChar(32)
+  mismatch     Boolean?
+  questions    Int
+  latencyMs    Int
+  inputTokens  Int           @default(0)
+  outputTokens Int           @default(0)
+  detail       Json
+  createdAt    DateTime      @default(now()) @db.Timestamptz(3)
+
+  @@unique([runId, personaId])
 }

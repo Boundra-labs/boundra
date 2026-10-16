@@ -57,6 +57,93 @@ export const questionSchema = z
   })
   .strict();
 
+const UINT64_MAX = (1n << 64n) - 1n;
+const UINT32_MAX = (1n << 32n) - 1n;
+const boundedInteger = (max: bigint) =>
+  z
+    .string()
+    .regex(/^(0|[1-9]\d*)$/)
+    .refine((value) => BigInt(value) <= max, 'Value exceeds contract bound');
+
+/** Wire form of the executor's `Mandate` tuple; integers are canonical base-10 strings. */
+export const mandateTupleSchema = z
+  .object({
+    chainId: z.literal(BASE_SEPOLIA_CHAIN_ID),
+    asset: addressSchema,
+    operator: addressSchema,
+    beneficiary: addressSchema,
+    expiresAt: boundedInteger(UINT64_MAX),
+    allowedVaults: z.number().int().min(1).max(3),
+    allowedActions: z.number().int().min(1).max(3),
+    maxLockupSeconds: boundedInteger(UINT32_MAX),
+    maxDepositPerAction: tokenAmountSchema,
+    maxCumulativeDeposits: tokenAmountSchema,
+    maxWithdrawPerAction: tokenAmountSchema,
+    allocationTarget: tokenAmountSchema,
+  })
+  .strict();
+
+interface ExactInteger {
+  toFixed(digits: number): string;
+}
+/** Persisted mandate columns (Prisma Decimal/BigInt) as the wire tuple. */
+export interface MandateRow {
+  asset: string;
+  operator: string;
+  beneficiary: string;
+  expiresAt: ExactInteger;
+  allowedVaults: number;
+  allowedActions: number;
+  maxLockupSeconds: bigint;
+  maxDepositPerAction: ExactInteger;
+  maxCumulativeDeposits: ExactInteger;
+  maxWithdrawPerAction: ExactInteger;
+  allocationTarget: ExactInteger;
+}
+export function mandateTupleFromRow(row: MandateRow): MandateTuple {
+  return mandateTupleSchema.parse({
+    chainId: BASE_SEPOLIA_CHAIN_ID,
+    asset: row.asset,
+    operator: row.operator,
+    beneficiary: row.beneficiary,
+    expiresAt: row.expiresAt.toFixed(0),
+    allowedVaults: row.allowedVaults,
+    allowedActions: row.allowedActions,
+    maxLockupSeconds: row.maxLockupSeconds.toString(),
+    maxDepositPerAction: row.maxDepositPerAction.toFixed(0),
+    maxCumulativeDeposits: row.maxCumulativeDeposits.toFixed(0),
+    maxWithdrawPerAction: row.maxWithdrawPerAction.toFixed(0),
+    allocationTarget: row.allocationTarget.toFixed(0),
+  });
+}
+
+export const answerSchema = z
+  .object({ questionId: z.string().min(1).max(100), alternativeId: z.string().min(1).max(64) })
+  .strict();
+
+/** Stable error codes returned by the API; messages are for display only. */
+export const errorCodes = [
+  'UNAUTHENTICATED',
+  'FORBIDDEN',
+  'CSRF_REJECTED',
+  'RATE_LIMITED',
+  'VALIDATION_FAILED',
+  'NOT_FOUND',
+  'CHALLENGE_INVALID',
+  'SIGNATURE_INVALID',
+  'WRONG_CHAIN',
+  'EXECUTOR_NOT_REGISTERED',
+  'INSUFFICIENT_BALANCE',
+  'QUESTION_NOT_ACTIVE',
+  'STALE_PREVIEW',
+  'INVALID_STATE',
+  'DEPENDENCY_UNAVAILABLE',
+  'INTERNAL_ERROR',
+] as const;
+export type ErrorCode = (typeof errorCodes)[number];
+
+export type MandateTuple = z.infer<typeof mandateTupleSchema>;
+export type Answer = z.infer<typeof answerSchema>;
 export type Intent = z.infer<typeof intentSchema>;
 export type ActionType = z.infer<typeof actionTypeSchema>;
 export type WorkflowState = z.infer<typeof workflowStateSchema>;

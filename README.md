@@ -4,9 +4,9 @@
 
 ## Status
 
-This repository contains the application foundation and Person 1's local contract/chain implementation, not a completed integrated wallet. Available: Next.js UI shell and injected-wallet connection, NestJS API health/OpenAPI, PostgreSQL/Prisma, exact-amount schemas, controlled mock vaults, bounded owner executors/factory, capped faucet, typed ABIs, verified chain snapshots, transaction/reconciliation modules, risk-event monitor, deployment script, Docker/CI and tests.
+Implemented locally: Person 1's contracts, typed chain modules and deploy script; Person 2's SIWE sessions, REST API with OpenAPI, deterministic ACCE planner and mandate builder, PostgreSQL schema, durable execution/monitor stores, authorization verification, the bounded agent loop (deposit, risk exit, escalation, revocation) with crash recovery, an optional validated LLM wording provider and the B0–B3 benchmark runner. The full flow is proven end-to-end on a local anvil chain (`pnpm test:e2e:chain`).
 
-Still to integrate: wallet authentication, ACCE/provider, frontend mandate/funding flow, Person 2's durable PostgreSQL execution/monitor ports and worker lifecycle, benchmark, and public deployment evidence. The worker remains observe-only until the persistence/runtime activation gates are met. No deployment addresses, transaction hashes or performance claims are invented. See [Person 1 progress](./docs/person-1-progress.md) and [worker integration port](./docs/worker-chain-port.md).
+Still open: the frontend mandate/funding UI (Person 3), public Base Sepolia deployment and receipts (Person 1), a real LLM provider run (needs a runtime key), Person 3's frozen 50-persona benchmark fixture, and the hosting/backup/monitoring release gates. No deployment addresses, transaction hashes, benchmark results or performance claims are invented. See [Person 1 progress](./docs/person-1-progress.md), [Person 2 progress](./docs/person-2-progress.md), [API](./docs/api.md), [ACCE](./docs/acce.md) and [data model](./docs/data-model.md).
 
 ## Requirements
 
@@ -37,7 +37,7 @@ corepack pnpm@10.32.1 dev
 | OpenAPI (development only) | http://127.0.0.1:3001/api/docs            |
 | Web dependency status      | http://localhost:3000/status              |
 
-The worker starts independently, persists heartbeats, and shuts down cleanly. It has no signing or job-processing implementation yet. A green readiness response means infrastructure is available, not that autonomous asset management is implemented.
+The worker starts independently and reports its mode in the heartbeat: `observe_only` without a reviewed deployment manifest, `monitor_only` when signing is not fully configured, and `execute` only when `EXECUTION_ENABLED=true`, an operator key, `ATTEMPT_ENCRYPTION_KEY` and gas caps are set and the deployment verifies. Readiness reports `executionEnabled` accordingly.
 
 ## Workspace
 
@@ -45,12 +45,15 @@ The worker starts independently, persists heartbeats, and shuts down cleanly. It
 apps/web/                      Next.js + React + Tailwind + wagmi
 apps/api/                      NestJS API + OpenAPI
 apps/worker/src/chain/         Person 1: chain execution/monitoring boundary
-apps/worker/src/orchestration/ Person 2: workflow/jobs boundary
+apps/worker/src/orchestration/ Person 2: decision policy, orchestrator, job runner
+apps/worker/src/persistence/  Person 2: PostgreSQL execution/monitor stores
 packages/shared/              Zod schemas and exact amount types
 packages/database/            PostgreSQL + Prisma client/migrations
-packages/chain/               viem read client and deployment manifest schema
+packages/chain/               viem read client, deployment manifest, mandate hashing
+packages/acce/                Person 2: deterministic ACCE planner and mandate builder
+packages/llm/                 Person 2: optional validated LLM wording/summaries
 contracts/                    Solidity + OpenZeppelin + Foundry
-evaluation/                   Benchmark handoff (not yet implemented)
+evaluation/                   Person 2: B0–B3 benchmark runner (fixtures: Person 3)
 tests/e2e/                    Playwright smoke tests
 deploy/                       Reverse-proxy template
 ```
@@ -68,11 +71,12 @@ pnpm test
 pnpm build
 pnpm contracts:test
 pnpm test:integration
+pnpm test:e2e:chain
 pnpm exec playwright install chromium
 pnpm test:e2e
 ```
 
-`test:integration` requires a migrated PostgreSQL database and creates/removes only its own random fixture records. Playwright starts the web server; its smoke tests do not require MetaMask, a chain deployment or a running API. Full authenticated transaction E2E remains assigned work.
+`test:integration` requires a migrated PostgreSQL database and creates/removes only its own random fixture records. `test:e2e:chain` starts anvil (chain ID 84532), deploys with the contracts' deploy script, migrates and drops its own temporary database, and runs the API and worker end to end; it needs PostgreSQL but no keys or public RPC. `pnpm benchmark -- --fixture <file>` runs B0–B3 (see `evaluation/README.md`). Playwright starts the web server; its smoke tests do not require MetaMask, a chain deployment or a running API. Full authenticated transaction E2E remains assigned work.
 
 `pnpm check` groups lint, typecheck, unit tests, app builds and contract tests. PostgreSQL integration and browser checks are separate commands. The first contract build downloads the pinned Solidity compiler. Prisma uses its v7 generated client and PostgreSQL driver adapter; `build:packages` generates the client automatically.
 

@@ -2,8 +2,10 @@ import { Controller, Get, Inject, ServiceUnavailableException } from '@nestjs/co
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { DatabaseService } from './database.service';
 import { readConfig } from './config';
+import { Public } from './common/request';
 
 @ApiTags('health')
+@Public()
 @Controller('health')
 export class HealthController {
   constructor(@Inject(DatabaseService) private readonly database: DatabaseService) {}
@@ -28,11 +30,12 @@ export class HealthController {
       ) {
         throw new Error('Worker unavailable');
       }
+      // Reports the worker's own activation result; only 'execute' may sign transactions.
       return {
         status: 'ok',
         database: 'connected',
-        worker: 'observe_only',
-        executionEnabled: false,
+        worker: heartbeat.mode,
+        executionEnabled: heartbeat.mode === 'execute',
       };
     } catch {
       throw new ServiceUnavailableException({

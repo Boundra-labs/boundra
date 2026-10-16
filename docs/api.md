@@ -1,0 +1,56 @@
+# Boundra API — Person 2
+
+REST API under `/api/v1` (NestJS). The machine-readable contract is [openapi.json](./openapi.json), regenerated with `pnpm --filter @boundra/api openapi:export`; Swagger UI is served at `/api/docs` outside production. Base Sepolia testnet only; all token amounts are **base-unit strings** (MockUSDC has 6 decimals), never numbers.
+
+## Sessions and request rules
+
+1. `POST /auth/challenge {address}` returns an EIP-4361 (SIWE) message bound to the web origin, chain 84532 and a single-use nonce (5 minutes).
+2. The wallet signs the message (`personal_sign`). `POST /auth/verify {message, signature}` consumes the nonce, sets the `__Host-boundra_session` cookie (HttpOnly, Secure, SameSite=Strict, 12 h) and returns `{address, csrfToken, expiresAt}`. Signing in never approves a mandate or transaction.
+3. Every non-public route needs the cookie. Every `POST`/`PATCH` also needs the `Origin` header equal to `WEB_ORIGIN` and `X-CSRF-Token: <csrfToken>`. `GET /auth/session` re-issues the CSRF token after a page reload.
+4. The owner is always taken from the session; addresses in request bodies are never used for authorization. Another owner's resources return `404`.
+
+Serve web and API from one origin (Caddy in production, a Next.js `/api` rewrite in development) so the cookie is first-party. Bodies are limited to 16 KB; login routes allow 10 requests/minute per client and other routes 120.
+
+## Errors
+
+```json
+{
+  "error": {
+    "code": "STALE_PREVIEW",
+    "message": "…",
+    "recovery": "Reload the latest preview and review it again."
+  }
+}
+```
+
+`code` values are stable (`errorCodes` in `packages/shared`): `UNAUTHENTICATED`, `FORBIDDEN`, `CSRF_REJECTED`, `RATE_LIMITED`, `VALIDATION_FAILED` (with `details` paths), `NOT_FOUND`, `CHALLENGE_INVALID`, `SIGNATURE_INVALID`, `WRONG_CHAIN`, `EXECUTOR_NOT_REGISTERED`, `INSUFFICIENT_BALANCE`, `QUESTION_NOT_ACTIVE`, `STALE_PREVIEW`, `INVALID_STATE`, `DEPENDENCY_UNAVAILABLE`, `INTERNAL_ERROR`. Internals are never echoed.
+
+## Owner journey
+
+| Step               | Request                                                                                       | Notes                                                                                                    |
+| ------------------ | --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Public config      | `GET /config/public`                                                                          | Reviewed contract addresses, operator address, vault descriptors; `configured: false` without a manifest |
+| Faucet, executor   | wallet → `faucet.claim()`, `factory.createExecutor()`                                         | Direct contract calls; the API holds no keys                                                             |
+| Register executor  | `POST /executors/register`                                                                    | Server reads `factory.executorOf(owner)` and verifies it; body is ignored                                |
+| Intent             | `POST /intents {objective, amount, chainId: 84532}`                                           | Rejects amounts above wallet + executor balance (`422 INSUFFICIENT_BALANCE`)                             |
+| Clarify            | `POST /intents/:id/answers {questionId, alternativeId}`                                       | One question at a time; `question` is null when done (`state: MANDATE_PENDING`)                          |
+| Draft              | `POST /intents/:id/mandate-drafts {expiryDays?, maxDepositPerAction?, maxWithdrawPerAction?}` | Returns `tuple`, `preview`, `previewHash`; `ESCALATED` when nothing is eligible                          |
+| Edit               | `PATCH /mandate-drafts/:id {…}`                                                               | Always a new revision; the old one is superseded                                                         |
+| Approve            | `POST /mandate-drafts/:id/approve {previewHash}`                                              | Must match the latest previewed revision; returns `ownerTransactions`                                    |
+| Owner transactions | wallet → `setMandate(tuple)`, `approve(executor, amount)`, `fund(amount)`                     | Exactly as returned; amounts are exact                                                                   |
+| Verify             | `POST /mandate-drafts/:id/authorization-check {txHash?}`                                      | `202`; the worker sets `AUTHORIZED` only from confirmed chain state                                      |
+| Monitor            | `GET /dashboard`, `GET /activity?before=&limit=`                                              | Confirmed balances/positions; timeline with explorer links for real transactions only                    |
+| Control            | wallet → `pause()`, `resume()`, `revoke()`, `recoverIdle()`, `ownerWithdraw()`                | The worker observes the change and stops                                                                 |
+
+Intent view fields: `state`, `question {questionId, dimension, text, alternatives, wordingSource}`, `answered[]`, `selection`, `candidates[] {vault, eligible, reasons}`, `narrowed[]`, `conflicts[]`. Drafts expose `status` (`PREVIEWED`, `APPROVED`, `AUTHORIZED`, `SUPERSEDED`, `REVOKED`, `EXPIRED`), `revision`, `tuple`, `preview` (with `plainSummary`, `notices`, testnet `labels`), `previewHash`, `mandateHash`, `onchainVersion`.
+
+Activity types include `INTENT_CREATED`, `QUESTION_ANSWERED`, `MANDATE_PREVIEWED`, `MANDATE_APPROVED`, `AUTHORIZATION_CHECK_REQUESTED`, `MANDATE_AUTHORIZED`, `EXECUTOR_FUNDED`, `DECISION_HOLD`, `DECISION_ESCALATE`, `ACTION_PROPOSED`, `ACTION_REJECTED`, `ACTION_BROADCAST`, `ACTION_CONFIRMED`, `ACTION_FAILED`, `RISK_EVENT_OBSERVED`, `MANDATE_REVOKED`, `MANDATE_EXPIRED`, `MANDATE_SUPERSEDED`, `DEMO_RESET`. HOLD, ESCALATE and pre-broadcast rejections never carry a transaction hash.
+
+## Admin and health
+
+- `POST /admin/demo/reset {ownerAddress}` (wallets in `ADMIN_ADDRESSES`): closes that owner's open synthetic drafts/intents; chain evidence and history are untouched. Risk fixtures are triggered by the risk-admin wallet calling `setRiskState` directly.
+- `GET /health/live`; `GET /health/ready` reports PostgreSQL, the worker heartbeat and `worker` mode (`observe_only`, `monitor_only`, `execute`). `executionEnabled` is true only in `execute` mode.
+
+## Configuration
+
+See `.env.example`. API-specific: `WEB_ORIGIN`, `SESSION_SECRET` (required in production; generated by `pnpm env:setup`), `ADMIN_ADDRESSES`, `DEPLOYMENT_MANIFEST_PATH`, `BASE_SEPOLIA_RPC_URL`, `CHAIN_CONFIRMATIONS`, `OPERATOR_ADDRESS` (public address only), `TRUST_PROXY`, rate limits and `LLM_*` (see [acce.md](./acce.md)).

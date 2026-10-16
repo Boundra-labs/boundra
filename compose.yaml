@@ -40,6 +40,7 @@ services:
       CHAIN_ID: 84532
       WORKER_POLL_INTERVAL_MS: 10000
       WORKER_HEARTBEAT_MAX_AGE_MS: 45000
+      RECEIPT_REORG_WINDOW_BLOCKS: ${RECEIPT_REORG_WINDOW_BLOCKS:-20}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -64,6 +65,7 @@ services:
       API_PORT: 3001
       WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3000}
       CHAIN_ID: 84532
+      SESSION_SECRET: ${SESSION_SECRET:?Run pnpm env:setup first}
     depends_on:
       migrate:
         condition: service_completed_successfully

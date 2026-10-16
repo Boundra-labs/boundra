@@ -14,18 +14,34 @@ const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 /** Reads one confirmed block, verifies pinned code and rejects reorgs during observation. */
 export class BoundraChainReader {
   readonly manifest: DeploymentManifest;
+  private verified?: { blockNumber: bigint; atMs: number };
 
   constructor(
     readonly client: Client,
     manifest: unknown,
     readonly confirmations = 5,
+    readonly deploymentRecheckMs = 60_000,
   ) {
     this.manifest = deploymentManifestSchema.parse(manifest);
     if (!Number.isSafeInteger(confirmations) || confirmations < 1 || confirmations > 100)
       throw new Error('Invalid confirmation depth');
+    if (
+      !Number.isSafeInteger(deploymentRecheckMs) ||
+      deploymentRecheckMs < 0 ||
+      deploymentRecheckMs > 3_600_000
+    )
+      throw new Error('Invalid deployment recheck interval');
   }
 
   async verifyDeployment(blockNumber: bigint) {
+    // Pinned contracts have no proxy or selfdestruct path, so runtime code cannot change.
+    // Periodic rechecks still catch mutable settings such as vault admin ownership.
+    if (
+      this.verified &&
+      blockNumber >= this.verified.blockNumber &&
+      Date.now() - this.verified.atMs < this.deploymentRecheckMs
+    )
+      return;
     const m = this.manifest;
     if ((await this.client.getChainId()) !== m.chainId) throw new ChainPolicyError('WRONG_CHAIN');
     if (blockNumber < BigInt(m.deploymentBlock))
@@ -148,6 +164,7 @@ export class BoundraChainReader {
       !same(faucetToken, token)
     )
       throw new ChainPolicyError('DEPLOYMENT_CONFIG_MISMATCH');
+    this.verified = { blockNumber, atMs: Date.now() };
   }
 
   async snapshot(ownerInput: Address, executorInput: Address): Promise<ExecutorSnapshot> {

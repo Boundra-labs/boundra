@@ -127,3 +127,28 @@ test('reader rejects a canonical block change during snapshot acquisition', asyn
     (error) => error.code === 'OBSERVATION_REORG',
   );
 });
+
+test('reader reuses a fresh deployment verification and rechecks when it expires', async () => {
+  const f = fixture();
+  let codeReads = 0;
+  f.client.getCode = async () => {
+    codeReads++;
+    return code;
+  };
+  const reader = new BoundraChainReader(f.client, f.manifest);
+  await reader.snapshot(addr(8), addr(7));
+  assert.equal(codeReads, 6, 'Five pinned contracts plus the executor');
+  await reader.snapshot(addr(8), addr(7));
+  assert.equal(codeReads, 7, 'Only the executor is read while verification is fresh');
+  await reader.verifyDeployment(99n);
+  assert.equal(codeReads, 12, 'An older block is verified again');
+
+  const strict = new BoundraChainReader(f.client, f.manifest, 5, 0);
+  await strict.snapshot(addr(8), addr(7));
+  f.client.getCode = async () => '0x6001';
+  await assert.rejects(
+    () => strict.snapshot(addr(8), addr(7)),
+    (error) => error.code === 'UNTRUSTED_BYTECODE',
+  );
+  assert.throws(() => new BoundraChainReader(f.client, f.manifest, 5, -1));
+});

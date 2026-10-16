@@ -1,7 +1,9 @@
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from './generated/prisma/client';
 
-export { Prisma, PrismaClient, WorkflowState } from './generated/prisma/client';
+export * from './generated/prisma/client';
+export * from './lease';
+export * from './jobs';
 
 export function createDatabaseClient(connectionString: string): PrismaClient {
   const url = new URL(connectionString);

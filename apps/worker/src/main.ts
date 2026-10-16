@@ -1,10 +1,32 @@
 import 'reflect-metadata';
-import { Module } from '@nestjs/common';
+import { Module, type OnApplicationShutdown, Inject } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { createDatabaseClient, type PrismaClient } from '@boundra/database';
 import { HeartbeatService } from './orchestration/heartbeat.service';
-import { readWorkerConfig } from './config';
+import { WorkerRuntime } from './runtime/worker.runtime';
+import { DATABASE, WORKER_CONFIG } from './runtime/tokens';
+import { readWorkerConfig, type WorkerConfig } from './config';
 
-@Module({ providers: [HeartbeatService] })
+class DatabaseLifecycle implements OnApplicationShutdown {
+  constructor(@Inject(DATABASE) private readonly db: PrismaClient) {}
+  async onApplicationShutdown() {
+    await this.db.$disconnect();
+  }
+}
+
+@Module({
+  providers: [
+    { provide: WORKER_CONFIG, useFactory: () => readWorkerConfig() },
+    {
+      provide: DATABASE,
+      inject: [WORKER_CONFIG],
+      useFactory: (config: WorkerConfig) => createDatabaseClient(config.DATABASE_URL),
+    },
+    DatabaseLifecycle,
+    HeartbeatService,
+    WorkerRuntime,
+  ],
+})
 class WorkerModule {}
 
 async function bootstrap() {
