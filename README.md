@@ -42,6 +42,16 @@ Open the web app at the exact origin in `WEB_ORIGIN` (default `http://localhost:
 
 The worker starts independently and reports its mode in the heartbeat: `observe_only` without a reviewed deployment manifest, `monitor_only` when signing is not fully configured, and `execute` only when `EXECUTION_ENABLED=true`, an operator key, `ATTEMPT_ENCRYPTION_KEY` and gas caps are set and the deployment verifies. Readiness reports `executionEnabled` accordingly.
 
+### Local chain (optional)
+
+Creating an intent checks your MockUSDC balance on chain, so the owner journey needs a deployment. Before (or instead of) the public Base Sepolia deployment, run Person 1's contracts on a local anvil chain:
+
+```sh
+node scripts/dev-chain.mjs --fund 0xYourWalletAddress
+```
+
+It starts anvil with chain ID 84532 on `http://127.0.0.1:8545`, runs `contracts/script/DeployBoundra.s.sol`, writes a manifest pinned to the deployed code hashes in `tmp/dev-chain/`, sends gas money to each `--fund` address and prints the `.env` lines to set (`BASE_SEPOLIA_RPC_URL`, `NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL`, `DEPLOYMENT_MANIFEST_PATH`, `OPERATOR_ADDRESS`). Restart the API, worker and web dev server after changing `.env`, and add the local network to your wallet. The chain uses anvil's public development keys and is not persisted; nothing on it is Base Sepolia evidence.
+
 ## Workspace
 
 ```text
