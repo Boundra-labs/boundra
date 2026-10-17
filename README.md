@@ -53,7 +53,20 @@ node scripts/dev-chain.mjs --fund 0xYourWalletAddress
 
 It starts anvil with chain ID 84532 on `http://127.0.0.1:8545`, runs `contracts/script/DeployBoundra.s.sol`, writes a manifest pinned to the deployed code hashes in `tmp/dev-chain/`, sends gas money to each `--fund` address and prints the `.env` lines to set (`BASE_SEPOLIA_RPC_URL`, `NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL`, `DEPLOYMENT_MANIFEST_PATH`, `OPERATOR_ADDRESS`). Restart the API, worker and web dev server after changing `.env`, and add the local network to your wallet. The chain uses anvil's public development keys; nothing on it is Base Sepolia evidence.
 
-Chain state is saved in `tmp/dev-chain/`, so stopping and restarting the script continues the same chain and the database stays consistent with it. `--fresh` deploys a new chain: reset the database afterwards (`prisma migrate reset` in `packages/database`), because its executors and mandates belong to the old chain.
+Chain state is saved in `tmp/dev-chain/` every few seconds and on exit, so restarting the script continues the same chain and the database stays consistent with it. Saves are atomic and the previous snapshot is kept, so even closing the terminal loses a few seconds at most. `--fresh` deploys a new chain: reset the database afterwards (`prisma migrate reset` in `packages/database`), because its executors and mandates belong to the old chain.
+
+#### Testing with MetaMask on the local chain
+
+The local chain uses Base Sepolia's chain ID, which the app requires. MetaMask keys some of its hosted services to the chain ID, so it treats this chain as the real Base Sepolia. Verified with MetaMask on 2026-10-17:
+
+- **Network:** add it yourself, with RPC `http://127.0.0.1:8545`, chain ID `84532` and currency `ETH`. Delete any old "Anvil" network on the same RPC with chain ID 31337 first. If MetaMask does not know chain 84532, the app's switch prompt now offers the local RPC as "Base Sepolia (local)".
+- **Owner account:** import a free anvil account with `node -e "import('./scripts/lib/local-chain.mjs').then(m => console.log(m.devKey(2)))"`. Account 2 is free; 0 deploys, 1 is the risk admin (useful for `/app/risk`), 3 is the operator and 5–9 are reserved for tests. Keep it a throwaway account: these keys are public, so never fund them on a public network.
+- **Gas:** MetaMask may set a gas limit estimated against the real Base Sepolia, where these contracts do not exist (about 21,000 gas, so the transaction runs out of gas and reverts). Set the gas limit by hand in the confirmation (Advanced): 2,200,000 for "Create executor", 500,000 for "Set mandate", 300,000 for the rest.
+- **Fees:** choose to pay with ETH, not "Paid by MetaMask" (its relay only reaches the real network), and turn off Settings → Advanced → Smart transactions. "This transaction is likely to fail" comes from the same real-network simulation and can be ignored here.
+- **Address:** open the app at `http://localhost:3000` exactly. Sign-in messages are bound to `WEB_ORIGIN`, so `127.0.0.1:3000` cannot sign in.
+- **Agent:** for the agent to act, start the worker with `EXECUTION_ENABLED=true`, `OPERATOR_PRIVATE_KEY` set to anvil account 3's key and the `MAX_*` gas caps. The worker then deposits, exits on risk and escalates by itself, with no MetaMask prompt.
+
+On the public Base Sepolia none of the gas or relay workarounds apply: MetaMask's services see the real contracts there.
 
 ## Workspace
 
