@@ -5,12 +5,14 @@
 **/src/generated
 **/coverage
 .env
+**/.env
 .env.*
 !.env.example
 contracts/out
 contracts/cache
 contracts/broadcast
 tmp
+backups
 playwright-report
 test-results
 *.log

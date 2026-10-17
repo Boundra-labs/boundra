@@ -1,10 +1,18 @@
-# Template for the eventual HTTPS deployment. Supply APP_DOMAIN and put this
-# proxy on the same Docker network as web/api; public deployment is not enabled.
+# HTTPS reverse proxy for the `public` Compose profile: one origin for the web app and the API.
+# A public APP_DOMAIN gets a Let's Encrypt certificate automatically (ports 80 and 443 must reach
+# this host). APP_DOMAIN=localhost uses Caddy's local CA, for trying the setup on one machine.
 {$APP_DOMAIN} {
-    handle /api/* {
-        reverse_proxy api:3001
-    }
-    handle {
-        reverse_proxy web:3000
-    }
+	encode zstd gzip
+
+	# HSTS only for real domains: browsers would otherwise force HTTPS on every localhost port.
+	@public not host localhost
+	header @public Strict-Transport-Security "max-age=31536000"
+	header -Server
+
+	handle /api/* {
+		reverse_proxy api:3001
+	}
+	handle {
+		reverse_proxy web:3000
+	}
 }

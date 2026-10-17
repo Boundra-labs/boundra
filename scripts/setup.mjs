@@ -2,7 +2,11 @@ import { randomBytes } from 'node:crypto';
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-const envPath = fileURLToPath(new URL('../.env', import.meta.url));
+// `--deploy` writes deploy/.env for the Docker deployment instead of the development .env.
+const deploy = process.argv.includes('--deploy');
+const envPath = fileURLToPath(new URL(deploy ? '../deploy/.env' : '../.env', import.meta.url));
+const templateUrl = new URL(deploy ? '../deploy/env.example' : '../.env.example', import.meta.url);
+const label = deploy ? 'deploy/.env' : '.env';
 // Per-installation secrets, generated locally and never committed.
 const generated = {
   SESSION_SECRET: () => randomBytes(32).toString('base64url'),
@@ -15,20 +19,20 @@ if (existsSync(envPath)) {
     (key) => !new RegExp(`^${key}=.+`, 'm').test(current),
   );
   if (missing.length === 0) {
-    console.log('.env already exists; left unchanged.');
+    console.log(`${label} already exists; left unchanged.`);
   } else {
     const lines = missing.map((key) => `${key}=${generated[key]()}`).join('\n');
     appendFileSync(envPath, `${current.endsWith('\n') ? '' : '\n'}${lines}\n`);
-    console.log(`.env already exists; added missing generated secrets: ${missing.join(', ')}.`);
+    console.log(`${label} already exists; added missing generated secrets: ${missing.join(', ')}.`);
   }
 } else {
   const password = randomBytes(24).toString('hex');
-  let example = readFileSync(new URL('../.env.example', import.meta.url), 'utf8').replaceAll(
+  let example = readFileSync(templateUrl, 'utf8').replaceAll(
     'replace-with-a-local-password',
     password,
   );
   for (const [key, make] of Object.entries(generated))
     example = example.replace(new RegExp(`^${key}=.*$`, 'm'), `${key}=${make()}`);
   writeFileSync(envPath, example, { mode: 0o600, flag: 'wx' });
-  console.log('Created .env with a unique local database password and generated secrets.');
+  console.log(`Created ${label} with a unique database password and generated secrets.`);
 }

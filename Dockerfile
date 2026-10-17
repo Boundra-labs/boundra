@@ -29,6 +29,10 @@ USER node
 CMD ["pnpm", "db:migrate"]
 
 FROM base AS api
+# Release identifier (e.g. git describe); set last so changing it never invalidates the build.
+ARG RELEASE=dev
+ENV BOUNDRA_RELEASE=$RELEASE
+LABEL org.opencontainers.image.version=$RELEASE
 ENV NODE_ENV=production
 COPY --from=build --chown=node:node /out/api /app
 USER node
@@ -36,12 +40,20 @@ EXPOSE 3001
 CMD ["node", "dist/main.js"]
 
 FROM base AS worker
+# Release identifier (e.g. git describe); set last so changing it never invalidates the build.
+ARG RELEASE=dev
+ENV BOUNDRA_RELEASE=$RELEASE
+LABEL org.opencontainers.image.version=$RELEASE
 ENV NODE_ENV=production
 COPY --from=build --chown=node:node /out/worker /app
 USER node
 CMD ["node", "dist/main.js"]
 
 FROM base AS web
+# Release identifier (e.g. git describe); set last so changing it never invalidates the build.
+ARG RELEASE=dev
+ENV BOUNDRA_RELEASE=$RELEASE
+LABEL org.opencontainers.image.version=$RELEASE
 ENV NODE_ENV=production HOSTNAME=0.0.0.0 PORT=3000
 COPY --from=build --chown=node:node /app/apps/web/.next/standalone /app
 COPY --from=build --chown=node:node /app/apps/web/.next/static /app/apps/web/.next/static

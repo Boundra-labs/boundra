@@ -19,6 +19,7 @@
     "test": "pnpm build:packages && pnpm -r --if-present test",
     "test:integration": "pnpm -r --if-present test:integration",
     "test:e2e": "playwright test",
+    "test:e2e:real": "playwright test -c playwright.real-api.config.ts",
     "test:e2e:chain": "pnpm --filter @boundra/worker test:e2e:chain",
     "benchmark": "pnpm build:packages && pnpm --filter @boundra/evaluation build && pnpm --filter @boundra/evaluation benchmark",
     "contracts:build": "pnpm --filter @boundra/contracts build",
@@ -26,6 +27,8 @@
     "db:up": "docker compose up -d postgres",
     "db:generate": "pnpm --filter @boundra/database db:generate",
     "db:migrate": "pnpm --filter @boundra/database db:migrate",
+    "db:backup": "docker compose run --rm backup once",
+    "db:restore-drill": "node scripts/restore-drill.mjs",
     "db:studio": "pnpm --filter @boundra/database db:studio",
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"
   },
@@ -36,6 +39,7 @@
     "eslint": "10.12.0",
     "prettier": "3.9.10",
     "typescript": "5.9.3",
-    "typescript-eslint": "8.71.2"
+    "typescript-eslint": "8.71.2",
+    "viem": "2.57.7"
   }
 }

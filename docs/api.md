@@ -9,7 +9,7 @@ REST API under `/api/v1` (NestJS). The machine-readable contract is [openapi.jso
 3. Every non-public route needs the cookie. Every `POST`/`PATCH` also needs the `Origin` header equal to `WEB_ORIGIN` and `X-CSRF-Token: <csrfToken>`. `GET /auth/session` re-issues the CSRF token after a page reload.
 4. The owner is always taken from the session; addresses in request bodies are never used for authorization. Another owner's resources return `404`.
 
-Serve web and API from one origin (Caddy in production, a Next.js `/api` rewrite in development) so the cookie is first-party. Bodies are limited to 16 KB; login routes allow 10 requests/minute per client and other routes 120.
+Serve web and API from one origin (Caddy in production; in development and the Compose stack the web app's `/api/v1/*` route handler forwards to `API_INTERNAL_URL`) so the cookie is first-party. Bodies are limited to 16 KB; login routes allow 10 requests/minute per client and other routes 120.
 
 ## Errors
 

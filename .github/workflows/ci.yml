@@ -26,6 +26,9 @@ jobs:
     env:
       DATABASE_URL: postgresql://boundra:ci-only-not-a-production-secret@localhost:55432/boundra_test?schema=public
       NEXT_TELEMETRY_DISABLED: '1'
+      # The browser suites run this job's web build against the local E2E chain. This build is
+      # never deployed: images are built separately (compose job, release workflow).
+      NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL: http://127.0.0.1:8545
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -41,3 +44,52 @@ jobs:
       - run: pnpm test:e2e:chain
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test:e2e
+      - run: pnpm test:e2e:real
+      - name: Keep browser traces and service logs of a failed run
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-results
+          path: |
+            test-results/
+            tmp/e2e-real/logs/
+          retention-days: 7
+
+  # The deployable stack as operators run it: images built from the Dockerfile, migrations,
+  # backup, worker, API, web and Caddy HTTPS (APP_DOMAIN=localhost, Caddy's local CA).
+  compose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      RELEASE: ci-${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - name: Deployment settings
+        run: |
+          node scripts/setup.mjs --deploy
+          sed -i "s/^RELEASE=.*/RELEASE=$RELEASE/" deploy/.env
+      - name: Build and start the stack
+        run: docker compose --env-file deploy/.env --profile app --profile public up --build -d
+      - name: Reports its release over HTTPS
+        run: |
+          compose="docker compose --env-file deploy/.env --profile app --profile public"
+          for i in $(seq 1 60); do
+            $compose exec -T proxy cat /data/caddy/pki/authorities/local/root.crt > caddy-root.crt 2>/dev/null \
+              && curl -fsS --cacert caddy-root.crt https://localhost/status -o status.json && break
+            sleep 5
+          done
+          cat status.json
+          node -e "
+            const s = require('./status.json');
+            const ok = s.status === 'ok' && s.release.web === process.env.RELEASE && s.release.api === process.env.RELEASE;
+            if (!ok) { console.error('unexpected /status'); process.exit(1); }"
+          curl -fsS --cacert caddy-root.crt https://localhost/api/v1/health/live
+      - name: Service logs
+        if: failure()
+        run: docker compose --env-file deploy/.env --profile app --profile public logs --no-color --tail 200
+      - name: Stop
+        if: always()
+        run: docker compose --env-file deploy/.env --profile app --profile public down --volumes

@@ -4,6 +4,9 @@ import { DatabaseService } from './database.service';
 import { readConfig } from './config';
 import { Public } from './common/request';
 
+/** The build's release identifier (Docker build arg RELEASE); "dev" outside release images. */
+const RELEASE = process.env.BOUNDRA_RELEASE ?? 'dev';
+
 @ApiTags('health')
 @Public()
 @Controller('health')
@@ -13,7 +16,7 @@ export class HealthController {
   @Get('live')
   @ApiOperation({ summary: 'Process liveness; does not claim chain readiness' })
   live() {
-    return { status: 'ok', service: 'api' };
+    return { status: 'ok', service: 'api', release: RELEASE };
   }
 
   @Get('ready')
@@ -33,6 +36,7 @@ export class HealthController {
       // Reports the worker's own activation result; only 'execute' may sign transactions.
       return {
         status: 'ok',
+        release: RELEASE,
         database: 'connected',
         worker: heartbeat.mode,
         executionEnabled: heartbeat.mode === 'execute',
