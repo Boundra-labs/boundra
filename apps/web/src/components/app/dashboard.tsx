@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import type { Address, Hash } from 'viem';
 import { VAULTS } from '@/lib/acce-copy';
-import { describeActivity } from '@/lib/activity-copy';
+import { describeActivity, describeEscalation } from '@/lib/activity-copy';
 import { formatMockUsdc } from '@/lib/amount';
 import { executorAbi } from '@/lib/contracts';
 import {
@@ -396,10 +396,10 @@ export function Dashboard() {
           <span>{state.detail}</span>
         </div>
         {m.escalationReason && m.status === 'AUTHORIZED' && (
-          <p className="gate-problem">
-            The agent escalated a decision to you ({m.escalationReason}). It takes no action on it
-            until you decide.
-          </p>
+          <div className="gate-problem" role="note">
+            <strong>The agent needs you.</strong> {describeEscalation(m.escalationReason)} It takes
+            no further action on this until you decide.
+          </div>
         )}
         <p className="intent-meta">
           {formatMockUsdc(m.tuple.allocationTarget)}

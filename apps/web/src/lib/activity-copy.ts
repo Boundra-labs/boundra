@@ -104,3 +104,20 @@ export function describeActivity(item: ActivityItem): Described {
       return { title: item.type.replaceAll('_', ' ').toLowerCase(), tone: 'neutral' };
   }
 }
+
+/**
+ * Why the agent escalated (the worker's ESCALATE reason codes) and what the owner can do now.
+ * The agent takes no further action on it; unknown codes still say that much.
+ */
+export function describeEscalation(code: string): string {
+  switch (code) {
+    case 'NO_WITHDRAWAL_CAPACITY':
+      return 'The vault reports degraded conditions and can’t pay anything out right now, so the agent can’t exit. What is still in the vault stays yours: withdraw it once the vault has capacity again, or pause or revoke the agent.';
+    case 'POSITION_LOCKED':
+      return 'The vault reports degraded conditions, but your position is still locked, so the agent can’t exit yet. It can be withdrawn once it unlocks; you can pause or revoke the agent meanwhile.';
+    case 'WITHDRAW_NOT_AUTHORIZED':
+      return 'The vault reports degraded conditions, but this mandate doesn’t let the agent withdraw. You can withdraw yourself, or revoke the mandate.';
+    default:
+      return `The agent escalated a decision to you (code ${code}).`;
+  }
+}
