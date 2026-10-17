@@ -7,12 +7,14 @@
  * only ever valid on a local chain; nothing deployed here is Base Sepolia evidence.
  */
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { gunzipSync } from 'node:zlib';
 import { dirname, join, resolve } from 'node:path';
 import {
   createPublicClient,
   createWalletClient,
   getAddress,
+  hexToBytes,
   http,
   keccak256,
   parseEther,
@@ -48,10 +50,10 @@ export async function isChainUp(rpc) {
 }
 
 /**
- * Starts anvil as chain 84532 and resolves once it answers RPC calls. With `statePath`, chain
- * state is loaded from and saved to that file (every few seconds, so a hard kill loses little).
+ * Starts anvil as chain 84532 and resolves once it answers RPC calls. With `loadStatePath`, the
+ * chain starts from that snapshot (see saveChainState); anvil itself never writes it.
  */
-export async function startAnvil({ port = 8545, stdio = 'ignore', statePath } = {}) {
+export async function startAnvil({ port = 8545, stdio = 'ignore', loadStatePath } = {}) {
   const rpc = `http://127.0.0.1:${port}`;
   const anvil = spawn(
     process.execPath,
@@ -64,7 +66,7 @@ export async function startAnvil({ port = 8545, stdio = 'ignore', statePath } = 
       '--block-time',
       '1',
       '--silent',
-      ...(statePath ? ['--state', statePath, '--state-interval', '5'] : []),
+      ...(loadStatePath ? ['--load-state', loadStatePath] : []),
     ],
     { stdio },
   );
@@ -76,6 +78,32 @@ export async function startAnvil({ port = 8545, stdio = 'ignore', statePath } = 
     await new Promise((r) => setTimeout(r, 250));
   }
   return { anvil, rpc };
+}
+
+/**
+ * Saves the chain's full state to `path` without ever leaving a half-written file: the snapshot
+ * (anvil_dumpState) is written to a temporary file and renamed into place, and the snapshot it
+ * replaces is kept as `<path>.prev`. A kill at any moment leaves at least one whole snapshot.
+ */
+export async function saveChainState(rpc, path) {
+  const hex = await client(rpc).request({ method: 'anvil_dumpState', params: [] });
+  const json = gunzipSync(hexToBytes(hex));
+  writeFileSync(`${path}.tmp`, json);
+  if (existsSync(path)) renameSync(path, `${path}.prev`);
+  renameSync(`${path}.tmp`, path);
+}
+
+/** The newest whole snapshot among `path` and `<path>.prev`, or null when there is none. */
+export function latestChainState(path) {
+  for (const candidate of [path, `${path}.prev`]) {
+    try {
+      JSON.parse(readFileSync(candidate, 'utf8'));
+      return candidate;
+    } catch {
+      // Missing or damaged: try the previous snapshot.
+    }
+  }
+  return null;
 }
 
 /**

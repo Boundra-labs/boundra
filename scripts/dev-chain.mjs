@@ -8,15 +8,25 @@
  *
  *   node scripts/dev-chain.mjs [--port 8545] [--fund 0xAddress ...] [--fresh]
  *
- * Chain state is saved in tmp/dev-chain/, so a restart continues the same chain and the database
- * stays consistent with it. `--fresh` deploys a new chain; reset the database afterwards, since
- * its executors and mandates belong to the old one.
+ * Chain state is saved in tmp/dev-chain/ every few seconds and on exit (Ctrl+C or closing the
+ * terminal), so a restart continues the same chain and the database stays consistent with it.
+ * Saves are atomic and the previous snapshot is kept, so a hard kill can lose a few seconds but
+ * never the chain. `--fresh` deploys a new chain; reset the database afterwards, since its
+ * executors and mandates belong to the old one.
  */
-import { existsSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, renameSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { createPublicClient, getAddress, http } from 'viem';
 import { baseSepolia } from 'viem/chains';
-import { deployBoundra, devAccount, fundGas, repo, startAnvil } from './lib/local-chain.mjs';
+import {
+  deployBoundra,
+  devAccount,
+  fundGas,
+  latestChainState,
+  repo,
+  saveChainState,
+  startAnvil,
+} from './lib/local-chain.mjs';
 
 const args = process.argv.slice(2);
 const option = (name, fallback) => {
@@ -29,17 +39,43 @@ const workDir = join(repo, 'tmp', 'dev-chain');
 const statePath = join(workDir, 'anvil-state.json');
 const manifestPath = join(workDir, 'manifest.json');
 if (args.includes('--fresh')) rmSync(workDir, { recursive: true, force: true });
-const resuming = existsSync(statePath) && existsSync(manifestPath);
+const snapshot = existsSync(manifestPath) ? latestChainState(statePath) : null;
+const resuming = Boolean(snapshot);
+if (snapshot && snapshot !== statePath) {
+  // Keep the damaged file for inspection, but out of the save rotation.
+  if (existsSync(statePath)) renameSync(statePath, `${statePath}.damaged`);
+  console.warn(
+    `The latest chain snapshot was damaged (kept as .damaged); resuming from ${snapshot}.`,
+  );
+}
 
 const { anvil, rpc } = await startAnvil({
   port: Number(option('--port', '8545')),
   stdio: 'inherit',
-  statePath,
+  loadStatePath: snapshot ?? undefined,
 });
-const stop = () => anvil.kill();
-process.on('SIGINT', stop);
-process.on('SIGTERM', stop);
-anvil.on('exit', (code) => process.exit(code ?? 0));
+
+let saving = Promise.resolve();
+const save = () => {
+  saving = saving.then(() =>
+    saveChainState(rpc, statePath).catch((error) =>
+      console.error(`Could not save chain state: ${error.message}`),
+    ),
+  );
+  return saving;
+};
+let stopping = false;
+const stop = async () => {
+  if (stopping) return;
+  stopping = true;
+  clearInterval(autosave);
+  await save();
+  anvil.kill();
+};
+// SIGHUP is what Windows sends when the terminal window closes.
+for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(signal, () => void stop());
+anvil.on('exit', (code) => process.exit(stopping ? 0 : (code ?? 1)));
+const autosave = setInterval(() => void save(), 5_000);
 
 let manifest;
 let deployed = false;
@@ -54,8 +90,11 @@ try {
     deployed = true;
   }
   await fundGas({ rpc, addresses: fund });
+  await save();
 } catch (error) {
-  stop();
+  stopping = true;
+  clearInterval(autosave);
+  anvil.kill();
   if (resuming)
     console.error(
       `\nThe saved chain in ${workDir} could not be resumed (${error.message}).\nRun with --fresh to deploy a new chain, then reset the database.`,
