@@ -41,3 +41,13 @@ jobs:
       - run: pnpm test:e2e:chain
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test:e2e
+      - run: pnpm test:e2e:real
+      - name: Keep browser traces and service logs of a failed run
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-results
+          path: |
+            test-results/
+            tmp/e2e-real/logs/
+          retention-days: 7

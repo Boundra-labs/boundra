@@ -24,7 +24,9 @@ import {
 
 /** The local chain the web app is built against for E2E (see playwright.config.ts). */
 export const E2E_RPC_URL = process.env.E2E_RPC_URL ?? 'http://127.0.0.1:8545';
-export const CHAIN_FILE = join(repo, 'tmp', 'e2e-chain', 'deployment.json');
+/** Where global setup records the deployed contracts; the real-API suite uses its own file. */
+export const CHAIN_FILE =
+  process.env.E2E_CHAIN_FILE ?? join(repo, 'tmp', 'e2e-chain', 'deployment.json');
 
 export interface E2EChain {
   rpc: string;

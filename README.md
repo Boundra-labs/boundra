@@ -70,7 +70,8 @@ packages/acce/                Person 2: deterministic ACCE planner and mandate b
 packages/llm/                 Person 2: optional validated LLM wording/summaries
 contracts/                    Solidity + OpenZeppelin + Foundry
 evaluation/                   Person 2: B0–B3 benchmark runner (fixtures: Person 3)
-tests/e2e/                    Playwright smoke tests
+tests/e2e/                    Playwright: UI on real contracts, API mocked
+tests/e2e-real/               Playwright: full journeys on the real API, worker and chain
 deploy/                       Reverse-proxy template
 ```
 
@@ -90,9 +91,10 @@ pnpm test:integration
 pnpm test:e2e:chain
 pnpm exec playwright install chromium
 pnpm test:e2e
+pnpm test:e2e:real
 ```
 
-`test:integration` requires a migrated PostgreSQL database and creates/removes only its own random fixture records. `test:e2e:chain` starts anvil (chain ID 84532), deploys with the contracts' deploy script, migrates and drops its own temporary database, and runs the API and worker end to end; it needs PostgreSQL but no keys or public RPC. `pnpm benchmark -- --fixture <file>` runs B0–B3 (see `evaluation/README.md`). Playwright starts the web server; its smoke tests do not require MetaMask, a chain deployment or a running API. Full authenticated transaction E2E remains assigned work.
+`test:integration` requires a migrated PostgreSQL database and creates/removes only its own random fixture records. `test:e2e:chain` starts anvil (chain ID 84532), deploys with the contracts' deploy script, migrates and drops its own temporary database, and runs the API and worker end to end; it needs PostgreSQL but no keys or public RPC. `pnpm benchmark -- --fixture <file>` runs B0–B3 (see `evaluation/README.md`). Both browser suites use an in-page test wallet instead of MetaMask (anvil's public development keys only) and start their own web server and local chain. `test:e2e` checks every screen and owner transaction against Person 1's real contracts, with the API mocked. `test:e2e:real` mocks nothing: it starts the real API and worker (execute mode) on a temporary PostgreSQL database and runs the required journey (sign-in → setup → goal → ACCE → review → authorize and fund → agent deposit → risk event set by the risk admin's wallet → agent exit and escalation → revoke → owner recovery) and the same-prompt, two-persona walkthrough. Its LLM provider is configured but simulated as overloaded, so it also proves that a provider failure falls back to labelled template wording without blocking anything. It needs PostgreSQL but no keys; service logs land in `tmp/e2e-real/logs/`.
 
 `pnpm check` groups lint, typecheck, unit tests, app builds and contract tests. PostgreSQL integration and browser checks are separate commands. The first contract build downloads the pinned Solidity compiler. Prisma uses its v7 generated client and PostgreSQL driver adapter; `build:packages` generates the client automatically.
 
