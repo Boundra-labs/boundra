@@ -21,6 +21,15 @@ test('an owner delegates, the agent deposits and responds to a risk event, and r
 }) => {
   const refusedBefore = await providerCallsRefused();
   const owner = await newOwner(page);
+  // Monitoring and the footer report the real stack: worker executing, releases reported.
+  const status = await (await page.request.get('/status')).json();
+  expect(status).toMatchObject({
+    status: 'ok',
+    worker: 'execute',
+    executionEnabled: true,
+    release: { web: 'dev', api: 'dev' },
+  });
+  await expect(page.getByText('API, database & worker connected')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Get your wallet ready' })).toBeVisible({
     timeout: 30_000,
   });

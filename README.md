@@ -100,13 +100,16 @@ pnpm test:e2e:real
 
 ## Full stack with Docker
 
+The Docker stack reads its own settings file, `deploy/.env`, because values inside containers (RPC, manifest path) differ from the host-run development `.env`.
+
 ```sh
-pnpm env:setup
-docker compose --profile app up --build -d
-docker compose --profile app ps
+node scripts/setup.mjs --deploy        # creates deploy/.env with fresh secrets
+export RELEASE=$(git describe --always --dirty)
+docker compose --env-file deploy/.env --profile app up --build -d
+docker compose --env-file deploy/.env --profile app ps
 ```
 
-The migration container runs before the worker/API. API and database are internal to the Docker network; web binds only to `127.0.0.1:3000`. Runtime containers run as a non-root user. Docker setup is a local baseline; configure domain, HTTPS and operational release gates before public use.
+Add `--profile public` for HTTPS through Caddy on one origin (set `APP_DOMAIN`, `WEB_ORIGIN=https://<domain>` and `TRUST_PROXY=true` first). The migration container runs before the worker and API; a `backup` service dumps PostgreSQL every 6 hours. API and database are internal to the Docker network, web binds only to `127.0.0.1:3000`, and runtime containers run as a non-root user. `/status` and `/api/v1/health/*` report the running release and whether the worker is executing. Deployment, release, rollback and backups: [runbook](./docs/runbook.md).
 
 The `NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL` setting is public browser configuration, not a secret. Docker's default build uses the public testnet endpoint; frontend public env changes require rebuilding the image. API/worker private settings are injected at runtime. Never prefix private keys or provider secrets with `NEXT_PUBLIC_`.
 

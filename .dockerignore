@@ -5,6 +5,7 @@
 **/src/generated
 **/coverage
 .env
+**/.env
 .env.*
 !.env.example
 contracts/out

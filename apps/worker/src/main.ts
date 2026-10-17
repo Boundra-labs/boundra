@@ -33,6 +33,7 @@ async function bootstrap() {
   readWorkerConfig();
   const app = await NestFactory.createApplicationContext(WorkerModule);
   app.enableShutdownHooks();
+  console.log(`Boundra worker started (release ${process.env.BOUNDRA_RELEASE ?? 'dev'})`);
 }
 
 void bootstrap().catch(() => {

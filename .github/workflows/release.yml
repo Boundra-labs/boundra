@@ -1,0 +1,46 @@
+name: Release
+
+# Publishes the deployable images for a version tag (v*). Tag only a commit whose CI run is green.
+# Images: ghcr.io/<owner>/boundra-{web,api,worker,migrate}:<tag>, built with RELEASE=<tag> so the
+# running services report exactly this release. Deploy or roll back by setting RELEASE (and
+# IMAGE_PREFIX=ghcr.io/<owner>/boundra) in deploy/.env; see docs/runbook.md.
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  images:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: true
+      matrix:
+        target: [web, api, worker, migrate]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Image name (registry paths must be lowercase)
+        id: name
+        run: echo "image=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/boundra-${{ matrix.target }}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: ${{ matrix.target }}
+          build-args: RELEASE=${{ github.ref_name }}
+          push: true
+          tags: ${{ steps.name.outputs.image }}:${{ github.ref_name }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.target }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.target }}

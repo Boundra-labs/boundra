@@ -147,12 +147,21 @@ button {
 .status-dot.online {
   background: var(--green);
 }
+.status-dot.partial {
+  background: var(--amber);
+}
 .service-status {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   font-size: 13px;
   color: var(--muted);
+}
+.service-release {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  opacity: 0.8;
 }
 
 @media (max-width: 760px) {

@@ -51,3 +51,42 @@ jobs:
             test-results/
             tmp/e2e-real/logs/
           retention-days: 7
+
+  # The deployable stack as operators run it: images built from the Dockerfile, migrations,
+  # backup, worker, API, web and Caddy HTTPS (APP_DOMAIN=localhost, Caddy's local CA).
+  compose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      RELEASE: ci-${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - name: Deployment settings
+        run: |
+          node scripts/setup.mjs --deploy
+          sed -i "s/^RELEASE=.*/RELEASE=$RELEASE/" deploy/.env
+      - name: Build and start the stack
+        run: docker compose --env-file deploy/.env --profile app --profile public up --build -d
+      - name: Reports its release over HTTPS
+        run: |
+          compose="docker compose --env-file deploy/.env --profile app --profile public"
+          for i in $(seq 1 60); do
+            $compose exec -T proxy cat /data/caddy/pki/authorities/local/root.crt > caddy-root.crt 2>/dev/null \
+              && curl -fsS --cacert caddy-root.crt https://localhost/status -o status.json && break
+            sleep 5
+          done
+          cat status.json
+          node -e "
+            const s = require('./status.json');
+            const ok = s.status === 'ok' && s.release.web === process.env.RELEASE && s.release.api === process.env.RELEASE;
+            if (!ok) { console.error('unexpected /status'); process.exit(1); }"
+          curl -fsS --cacert caddy-root.crt https://localhost/api/v1/health/live
+      - name: Service logs
+        if: failure()
+        run: docker compose --env-file deploy/.env --profile app --profile public logs --no-color --tail 200
+      - name: Stop
+        if: always()
+        run: docker compose --env-file deploy/.env --profile app --profile public down --volumes

@@ -27,3 +27,35 @@ test('service status reports unavailable dependencies honestly', async ({ page }
   await page.goto('/');
   await expect(page.getByText(/Services unavailable/)).toBeVisible();
 });
+
+test('a connected stack whose agent cannot execute says so, with the release', async ({ page }) => {
+  await page.route('**/status', (route) =>
+    route.fulfill({
+      json: {
+        status: 'ok',
+        worker: 'monitor_only',
+        executionEnabled: false,
+        release: { web: 'v0.4.0-3-gabc1234', api: 'v0.4.0-3-gabc1234' },
+      },
+    }),
+  );
+  await page.goto('/');
+  await expect(page.getByText('the agent is not executing transactions right now')).toBeVisible();
+  await expect(page.getByText('Release v0.4.0-3-gabc1234')).toBeVisible();
+});
+
+test('a fully connected stack in execute mode reports it', async ({ page }) => {
+  await page.route('**/status', (route) =>
+    route.fulfill({
+      json: {
+        status: 'ok',
+        worker: 'execute',
+        executionEnabled: true,
+        release: { web: 'dev', api: 'dev' },
+      },
+    }),
+  );
+  await page.goto('/');
+  await expect(page.getByText('API, database & worker connected')).toBeVisible();
+  await expect(page.getByText(/^Release /)).toHaveCount(0);
+});

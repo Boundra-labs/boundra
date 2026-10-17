@@ -1,5 +1,16 @@
 name: boundra
 
+# Shared by the API and worker. Point DEPLOYMENT_MANIFEST_PATH at a reviewed manifest in
+# deploy/manifests (mounted at /config/manifests); unset, the worker stays observe-only.
+x-database-url: &database-url postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+
+x-chain: &chain
+  CHAIN_ID: 84532
+  BASE_SEPOLIA_RPC_URL: ${BASE_SEPOLIA_RPC_URL:-https://sepolia.base.org}
+  DEPLOYMENT_MANIFEST_PATH: ${DEPLOYMENT_MANIFEST_PATH:-}
+  CHAIN_CONFIRMATIONS: ${CHAIN_CONFIRMATIONS:-5}
+  WORKER_HEARTBEAT_MAX_AGE_MS: ${WORKER_HEARTBEAT_MAX_AGE_MS:-45000}
+
 services:
   postgres:
     image: postgres:17.9-alpine
@@ -41,27 +52,40 @@ services:
 
   migrate:
     profiles: [app]
+    image: ${IMAGE_PREFIX:-boundra}-migrate:${RELEASE:-dev}
     build:
       context: .
       target: migrate
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+      DATABASE_URL: *database-url
     depends_on:
       postgres:
         condition: service_healthy
 
   worker:
     profiles: [app]
+    image: ${IMAGE_PREFIX:-boundra}-worker:${RELEASE:-dev}
     build:
       context: .
       target: worker
+      args:
+        RELEASE: ${RELEASE:-dev}
     environment:
+      <<: *chain
       NODE_ENV: production
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
-      CHAIN_ID: 84532
-      WORKER_POLL_INTERVAL_MS: 10000
-      WORKER_HEARTBEAT_MAX_AGE_MS: 45000
+      DATABASE_URL: *database-url
+      WORKER_POLL_INTERVAL_MS: ${WORKER_POLL_INTERVAL_MS:-10000}
       RECEIPT_REORG_WINDOW_BLOCKS: ${RECEIPT_REORG_WINDOW_BLOCKS:-20}
+      # Signing stays off unless every one of these is set (see docs/runbook.md, worker modes).
+      EXECUTION_ENABLED: ${EXECUTION_ENABLED:-false}
+      OPERATOR_PRIVATE_KEY: ${OPERATOR_PRIVATE_KEY:-}
+      ATTEMPT_ENCRYPTION_KEY: ${ATTEMPT_ENCRYPTION_KEY:-}
+      MAX_GAS: ${MAX_GAS:-}
+      MAX_FEE_PER_GAS_WEI: ${MAX_FEE_PER_GAS_WEI:-}
+      MAX_PRIORITY_FEE_PER_GAS_WEI: ${MAX_PRIORITY_FEE_PER_GAS_WEI:-}
+      ACTION_DEADLINE_SECONDS: ${ACTION_DEADLINE_SECONDS:-300}
+    volumes:
+      - ./deploy/manifests:/config/manifests:ro
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -76,17 +100,32 @@ services:
 
   api:
     profiles: [app]
+    image: ${IMAGE_PREFIX:-boundra}-api:${RELEASE:-dev}
     build:
       context: .
       target: api
+      args:
+        RELEASE: ${RELEASE:-dev}
     environment:
+      <<: *chain
       NODE_ENV: production
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+      DATABASE_URL: *database-url
       API_HOST: 0.0.0.0
       API_PORT: 3001
       WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3000}
-      CHAIN_ID: 84532
       SESSION_SECRET: ${SESSION_SECRET:?Run pnpm env:setup first}
+      # true only behind the public proxy, which sets X-Forwarded-For; otherwise it is spoofable.
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+      OPERATOR_ADDRESS: ${OPERATOR_ADDRESS:-}
+      ADMIN_ADDRESSES: ${ADMIN_ADDRESSES:-}
+      LLM_PROVIDER: ${LLM_PROVIDER:-disabled}
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_DEADLINE_MS: ${LLM_DEADLINE_MS:-20000}
+      LLM_MAX_OUTPUT_TOKENS: ${LLM_MAX_OUTPUT_TOKENS:-4000}
+      LLM_MAX_TOKENS_PER_HOUR: ${LLM_MAX_TOKENS_PER_HOUR:-200000}
+    volumes:
+      - ./deploy/manifests:/config/manifests:ro
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -108,9 +147,12 @@ services:
 
   web:
     profiles: [app]
+    image: ${IMAGE_PREFIX:-boundra}-web:${RELEASE:-dev}
     build:
       context: .
       target: web
+      args:
+        RELEASE: ${RELEASE:-dev}
     environment:
       NODE_ENV: production
       API_INTERNAL_URL: http://api:3001
@@ -135,5 +177,30 @@ services:
     init: true
     restart: unless-stopped
 
+  # HTTPS in front of web and API on one origin (deploy/Caddyfile). Certificates come from
+  # Let's Encrypt for a public APP_DOMAIN, or Caddy's local CA for APP_DOMAIN=localhost.
+  proxy:
+    profiles: [public]
+    image: caddy:2.10.2-alpine
+    environment:
+      # Your public domain; localhost (the default) serves only this machine via Caddy's local CA.
+      APP_DOMAIN: ${APP_DOMAIN:-localhost}
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      web:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   postgres_data:
+  caddy_data:
+  caddy_config:
