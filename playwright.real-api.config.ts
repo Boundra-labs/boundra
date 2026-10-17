@@ -23,7 +23,8 @@ export default defineConfig({
   use: { baseURL: REAL_STACK.webOrigin, trace: 'retain-on-failure' },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
-    command: `corepack pnpm@10.32.1 --filter @boundra/web exec next dev --hostname 127.0.0.1 --port ${REAL_STACK.webPort}`,
+    // Production build in CI, next dev locally (scripts/e2e-web-server.mjs).
+    command: `node scripts/e2e-web-server.mjs ${REAL_STACK.webPort}`,
     url: `http://127.0.0.1:${REAL_STACK.webPort}`,
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,

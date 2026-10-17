@@ -26,6 +26,9 @@ jobs:
     env:
       DATABASE_URL: postgresql://boundra:ci-only-not-a-production-secret@localhost:55432/boundra_test?schema=public
       NEXT_TELEMETRY_DISABLED: '1'
+      # The browser suites run this job's web build against the local E2E chain. This build is
+      # never deployed: images are built separately (compose job, release workflow).
+      NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL: http://127.0.0.1:8545
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
