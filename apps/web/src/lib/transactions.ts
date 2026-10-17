@@ -11,7 +11,7 @@ import {
   type TransactionReceipt,
 } from 'viem';
 import { useConfig } from 'wagmi';
-import { simulateContract, waitForTransactionReceipt, writeContract } from 'wagmi/actions';
+import { getPublicClient, simulateContract, writeContract } from 'wagmi/actions';
 import { isUserRejection, walletErrorMessage } from './wallet-errors';
 
 export interface ContractRequest {
@@ -41,6 +41,9 @@ export const isBusy = (state: TransactionState) =>
 /** Explains a revert found while simulating, by the contract's custom error name. */
 export type RevertExplainer = (errorName: string, args: readonly unknown[]) => string | undefined;
 
+/** Headroom on our own gas estimate, so state changes between estimate and inclusion fit. */
+const GAS_HEADROOM_PERCENT = 120n;
+
 function revertOf(error: unknown) {
   if (!(error instanceof BaseError)) return null;
   const revert = error.walk((e) => e instanceof ContractFunctionRevertedError);
@@ -50,6 +53,11 @@ function revertOf(error: unknown) {
 /**
  * Sends one owner transaction: simulate first (so a revert is explained before the wallet is
  * asked and before any gas is spent), then wallet confirmation, broadcast and receipt.
+ *
+ * The gas limit comes from our own estimate against the app's configured chain, not the
+ * wallet's: a wallet may estimate against a different endpoint for the same chain ID (MetaMask's
+ * hosted services did, for a local chain impersonating Base Sepolia, and set a limit that made
+ * the transaction run out of gas).
  */
 export function useOwnerTransaction(account: Address | undefined, explain?: RevertExplainer) {
   const config = useConfig();
@@ -86,22 +94,33 @@ export function useOwnerTransaction(account: Address | undefined, explain?: Reve
           }
           throw error;
         }
+        const client = getPublicClient(config, { chainId: BASE_SEPOLIA_CHAIN_ID })!;
+        const estimate = await client
+          .estimateContractGas({ ...request, account } as never)
+          .catch(() => undefined);
 
         setState({ phase: 'wallet' });
         const hash = await writeContract(config, {
           ...request,
           account,
           chainId: BASE_SEPOLIA_CHAIN_ID,
+          ...(estimate ? { gas: (estimate * GAS_HEADROOM_PERCENT) / 100n } : {}),
         } as never);
 
         setState({ phase: 'pending', hash });
         let receipt: TransactionReceipt;
         try {
-          receipt = await waitForTransactionReceipt(config, {
+          // viem's wait, not wagmi's: wagmi's replays a reverted transaction to read its reason
+          // and throws if that replay fails (e.g. out of gas), which hid real reverts as "could
+          // not be confirmed". Wallets may also broadcast after returning the hash (MetaMask
+          // smart transactions), so keep looking well past the default.
+          receipt = await client.waitForTransactionReceipt({
             hash,
-            chainId: BASE_SEPOLIA_CHAIN_ID,
+            retryCount: 20,
+            timeout: 180_000,
           });
-        } catch {
+        } catch (error) {
+          console.warn('Transaction receipt not found', hash, error);
           // It was broadcast; sending again could duplicate it.
           return settle({
             phase: 'failed',

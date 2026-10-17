@@ -36,5 +36,19 @@ export function walletErrorMessage(error: unknown, action: string): string {
     return 'Your wallet already has a request open. Finish or close it in the wallet, then try again.';
   if (has(error, (e) => e.name === 'SwitchChainNotSupportedError'))
     return 'This wallet cannot switch networks from the app. Switch to Base Sepolia in the wallet itself.';
-  return `Your wallet could not complete this, so nothing was ${action}. Try again.`;
+  // Anything else: keep the wallet's own reason visible (and the full error in the console), so
+  // an owner or developer can act on it instead of retrying blindly.
+  console.warn('Wallet request failed', error);
+  const reason = walletReason(error);
+  return `Your wallet could not complete this, so nothing was ${action}.${reason ? ` It said: “${reason}”.` : ''} Try again.`;
+}
+
+/** The most specific short reason a provider gave, without viem's request dump. */
+function walletReason(error: unknown): string | undefined {
+  const generic = /^(An unknown error occurred|Internal JSON-RPC error)\.?$/i;
+  for (const e of chain(error).reverse()) {
+    const text = (e.shortMessage ?? e.message ?? '').split('\n')[0]!.trim();
+    if (text && !generic.test(text)) return text.length > 160 ? `${text.slice(0, 157)}…` : text;
+  }
+  return undefined;
 }
