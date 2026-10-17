@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { createSiweMessage, generateSiweNonce } from 'viem/siwe';
-import { e2eChain } from './support/chain';
+import { E2E_RPC_URL, e2eChain } from './support/chain';
 import { mockAccountApi, mockPublicConfig } from './support/mock-api';
 import { installTestWallet } from './support/wallet';
 
@@ -123,4 +123,24 @@ test('a wallet that switched accounts must match the session', async ({ page }) 
   await page.goto('/app');
   await page.getByRole('button', { name: 'Connect wallet' }).click();
   await expect(page.getByRole('heading', { name: 'Your wallet switched accounts' })).toBeVisible();
+});
+
+test('a wallet that does not know the network is asked to add the app’s own RPC', async ({
+  page,
+}) => {
+  const wallet = await installTestWallet(page, { chainId: 1, knownChains: [1] });
+  await mockAuthApi(page);
+  await mockPublicConfig(page, e2eChain());
+  await page.goto('/app');
+  await page.getByRole('button', { name: 'Connect wallet' }).click();
+  await page.getByRole('button', { name: 'Switch to Base Sepolia' }).click();
+  await expect(page.getByText('It is not a transaction and costs no gas.')).toBeVisible();
+
+  // On a local chain the wallet must get the local RPC, not public Base Sepolia's.
+  expect(wallet.addChainRequests()).toHaveLength(1);
+  expect(wallet.addChainRequests()[0]).toMatchObject({
+    chainId: '0x14a34',
+    chainName: 'Base Sepolia (local)',
+    rpcUrls: [E2E_RPC_URL],
+  });
 });

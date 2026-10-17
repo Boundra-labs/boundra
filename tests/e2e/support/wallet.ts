@@ -15,6 +15,19 @@ export interface TestWalletOptions {
   privateKey?: Hex;
   /** RPC the wallet sends transactions to and forwards reads to. */
   rpc?: string;
+  /**
+   * Networks the wallet already knows. Switching to any other fails with code 4902, like
+   * MetaMask, so the app must ask to add it (wallet_addEthereumChain). Default: knows them all.
+   */
+  knownChains?: number[];
+}
+
+/** A wallet_addEthereumChain request, as the app sent it. */
+export interface AddChainRequest {
+  chainId: string;
+  chainName: string;
+  rpcUrls: string[];
+  nativeCurrency: { name: string; symbol: string; decimals: number };
 }
 
 interface WalletTransaction {
@@ -36,6 +49,10 @@ export async function installTestWallet(page: Page, options: TestWalletOptions =
   const sender = createWalletClient({ account, chain: baseSepolia, transport: http(rpc) });
   let signRequests = 0;
   let transactionRequests = 0;
+  const addChainRequests: AddChainRequest[] = [];
+  await page.exposeFunction('__testWalletAddChain', (request: AddChainRequest) => {
+    addChainRequests.push(request);
+  });
   await page.exposeFunction('__testWalletSign', async (messageHex: string) => {
     signRequests++;
     if (options.rejectSignatures) return null;
@@ -52,17 +69,19 @@ export async function installTestWallet(page: Page, options: TestWalletOptions =
     });
   });
   await page.addInitScript(
-    ({ address, chainId, rpc }) => {
+    ({ address, chainId, rpc, knownChains }) => {
       // Like a real extension, the wallet remembers this site's authorization and its network
       // across reloads (per tab).
       const saved = JSON.parse(sessionStorage.getItem('__testWallet') ?? 'null') as {
         chain: number;
         connected: boolean;
+        known: number[] | null;
       } | null;
       let chain = saved?.chain ?? chainId;
       let connected = saved?.connected ?? false;
+      let known = saved?.known ?? knownChains;
       const save = () =>
-        sessionStorage.setItem('__testWallet', JSON.stringify({ chain, connected }));
+        sessionStorage.setItem('__testWallet', JSON.stringify({ chain, connected, known }));
       const listeners = new Map<string, Set<(value: unknown) => void>>();
       const emit = (event: string, value: unknown) =>
         listeners.get(event)?.forEach((listener) => listener(value));
@@ -71,6 +90,7 @@ export async function installTestWallet(page: Page, options: TestWalletOptions =
       const bridge = window as unknown as {
         __testWalletSign: (m: string) => Promise<string | null>;
         __testWalletSend: (tx: unknown) => Promise<string | null>;
+        __testWalletAddChain: (request: unknown) => Promise<void>;
       };
       let rpcId = 0;
       const forward = async (method: string, params: unknown[] = []) => {
@@ -114,7 +134,21 @@ export async function installTestWallet(page: Page, options: TestWalletOptions =
               save();
               return null;
             case 'wallet_switchEthereumChain': {
-              chain = Number.parseInt((params?.[0] as { chainId: string }).chainId, 16);
+              const next = Number.parseInt((params?.[0] as { chainId: string }).chainId, 16);
+              if (known && !known.includes(next))
+                throw Object.assign(new Error('Unrecognized chain ID.'), { code: 4902 });
+              chain = next;
+              save();
+              emit('chainChanged', hex(chain));
+              return null;
+            }
+            case 'wallet_addEthereumChain': {
+              // Like MetaMask: the owner approves adding the network, then switching to it.
+              const request = params?.[0] as { chainId: string };
+              await bridge.__testWalletAddChain(request);
+              const added = Number.parseInt(request.chainId, 16);
+              if (known && !known.includes(added)) known = [...known, added];
+              chain = added;
               save();
               emit('chainChanged', hex(chain));
               return null;
@@ -139,11 +173,17 @@ export async function installTestWallet(page: Page, options: TestWalletOptions =
       };
       Object.defineProperty(window, 'ethereum', { value: provider, configurable: true });
     },
-    { address: account.address, chainId: options.chainId ?? 84532, rpc },
+    {
+      address: account.address,
+      chainId: options.chainId ?? 84532,
+      rpc,
+      knownChains: options.knownChains ?? null,
+    },
   );
   return {
     address: account.address,
     signRequests: () => signRequests,
     transactionRequests: () => transactionRequests,
+    addChainRequests: () => addChainRequests,
   };
 }
