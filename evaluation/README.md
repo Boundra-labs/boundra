@@ -27,4 +27,4 @@ All methods use the same mandate builder and action set; only elicitation and co
 
 See `src/fixtures.ts` (`fixtureSchema`). Each persona has a public `prompt` and `amount`, hidden non-negotiable preferences (`acceptsLockupDays`, `needsFundsWithinDays` or `null` when unsure, `unsureAboutLockup`, `permitsTimedVault`), case labels and the labeller's `acceptableActions`.
 
-`fixtures/example-prd-personas.json` contains the PRD §3.2 demo personas plus one misleading-description case. It exists to exercise the runner and is **not** the frozen 50-persona benchmark. No benchmark results are claimed until Person 3's 20 development / 30 held-out fixture is frozen and run.
+`fixtures/example-prd-personas.json` contains the PRD §3.2 demo personas plus one misleading-description case. It exists to exercise the runner and is **not** the benchmark. The benchmark is `fixtures/boundra-personas-v1.json` (20 development / 30 held-out; rubric, review and freeze steps in `fixtures/README.md`). No benchmark results are claimed until it is frozen and run.
