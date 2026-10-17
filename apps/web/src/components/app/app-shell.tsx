@@ -4,19 +4,23 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { BrandMark } from '@/components/brand-mark';
 import { ServiceStatus } from '@/components/service-status';
+import { usePublicConfig } from '@/lib/public-config';
 import { useSession, useSignOut } from '@/lib/session';
 import { shortAddress } from './format';
 
 function AccountMenu() {
   const session = useSession();
   const signOut = useSignOut();
+  const config = usePublicConfig();
   const current = session.data;
   if (!current) return null;
+  const riskAdmin = config.data?.contracts?.riskAdmin.toLowerCase() === current.address;
   return (
     <div className="app-account">
       <nav className="app-nav" aria-label="App">
         <Link href="/app">Overview</Link>
         <Link href="/app?new=1">New goal</Link>
+        {riskAdmin && <Link href="/app/risk">Vault conditions</Link>}
       </nav>
       <span className="app-account-address" title={current.address}>
         <span className="status-dot online" aria-hidden="true" />

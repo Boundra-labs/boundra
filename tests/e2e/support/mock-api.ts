@@ -1,6 +1,14 @@
-import type { Page } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 import type { Address } from 'viem';
-import { e2eChain, executorOf, executorSnapshot, prepareOwner, type E2EChain } from './chain';
+import {
+  e2eChain,
+  executorOf,
+  executorSnapshot,
+  liquidMandate,
+  operatorDeposit,
+  prepareOwner,
+  type E2EChain,
+} from './chain';
 import { installTestWallet } from './wallet';
 
 /**
@@ -134,6 +142,44 @@ export async function readyOwnerAt(page: Page, path: string, { connect = true } 
   await page.goto(path);
   if (connect) await page.getByRole('button', { name: 'Connect wallet' }).click();
   return { owner, wallet };
+}
+
+/**
+ * An owner whose LiquidVault mandate is set, approved and funded on the E2E chain (and, by
+ * default, already deposited by the operator), on the overview behind a dashboard stand-in that
+ * reads the chain on every request.
+ */
+export async function activeOwnerAt(page: Page, { deposit = true }: { deposit?: boolean } = {}) {
+  const owner = await prepareOwner();
+  const mandate = liquidMandate(owner.address);
+  await owner.setMandate(mandate);
+  await owner.approve(300_000_000n);
+  await owner.fund(300_000_000n);
+  if (deposit)
+    await operatorDeposit(owner.executor!, e2eChain().manifest.liquidVault, 300_000_000n);
+
+  await installTestWallet(page, { privateKey: owner.privateKey });
+  await mockSignedIn(page, owner.address);
+  await mockPublicConfig(page, e2eChain());
+  await mockAccountApi(page, owner.address, { registered: owner.executor });
+  await mockDashboardApi(page, {
+    owner: owner.address,
+    executor: owner.executor!,
+    mandate: {
+      id: crypto.randomUUID(),
+      status: 'AUTHORIZED',
+      revision: 1,
+      selectedVault: 'LIQUID',
+      tuple: mandate,
+      onchainVersion: '1',
+      escalationReason: null,
+    },
+  });
+  await mockActivity(page, []);
+  await page.goto('/app');
+  await page.getByRole('button', { name: 'Connect wallet' }).click();
+  await expect(page.getByRole('heading', { name: 'Your agent' })).toBeVisible();
+  return owner;
 }
 
 const THIRTY_DAYS = '2592000';

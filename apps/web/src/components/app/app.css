@@ -974,7 +974,54 @@
   text-decoration: underline;
 }
 
+/* Demo risk admin: vault conditions */
+.risk-page {
+  display: grid;
+  gap: 24px;
+  max-width: 1040px;
+  margin: 0 auto;
+}
+.risk-page .gate-lede + .field-note {
+  margin-top: 12px;
+}
+.risk-vaults {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  align-items: start;
+}
+.vault-condition .panel-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.vault-condition .funds {
+  grid-template-columns: 1fr;
+}
+.risk-form fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.risk-form legend {
+  padding: 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+.risk-form .options {
+  margin-top: 4px;
+}
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
 @media (max-width: 900px) {
+  .risk-vaults {
+    grid-template-columns: 1fr;
+  }
   .flow {
     grid-template-columns: 1fr;
   }

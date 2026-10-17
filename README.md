@@ -29,14 +29,15 @@ corepack pnpm@10.32.1 dev
 
 `env:setup` creates a private local `.env` with a random database password and leaves existing configuration unchanged. PostgreSQL binds to loopback port **55432** to avoid common local conflicts. First startup may take a few seconds to become healthy; retry migrations once PostgreSQL is ready.
 
-| Service                    | Local URL                                 |
-| -------------------------- | ----------------------------------------- |
-| Web                        | http://localhost:3000                     |
-| Owner app (sign-in)        | http://localhost:3000/app                 |
-| API liveness               | http://127.0.0.1:3001/api/v1/health/live  |
-| API readiness              | http://127.0.0.1:3001/api/v1/health/ready |
-| OpenAPI (development only) | http://127.0.0.1:3001/api/docs            |
-| Web dependency status      | http://localhost:3000/status              |
+| Service                              | Local URL                                 |
+| ------------------------------------ | ----------------------------------------- |
+| Web                                  | http://localhost:3000                     |
+| Owner app (sign-in)                  | http://localhost:3000/app                 |
+| Vault conditions (risk admin wallet) | http://localhost:3000/app/risk            |
+| API liveness                         | http://127.0.0.1:3001/api/v1/health/live  |
+| API readiness                        | http://127.0.0.1:3001/api/v1/health/ready |
+| OpenAPI (development only)           | http://127.0.0.1:3001/api/docs            |
+| Web dependency status                | http://localhost:3000/status              |
 
 Open the web app at the exact origin in `WEB_ORIGIN` (default `http://localhost:3000`). Sign-in messages are bound to that origin, so the app refuses to sign in from `http://127.0.0.1:3000` and links to the right address instead. The web app forwards `/api/v1/*` to `API_INTERNAL_URL`, so the browser only ever talks to one origin.
 

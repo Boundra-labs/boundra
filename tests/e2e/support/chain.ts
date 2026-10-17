@@ -7,6 +7,7 @@ import {
   getAddress,
   http,
   keccak256,
+  maxUint256,
   parseAbi,
   zeroAddress,
   type Address,
@@ -37,7 +38,15 @@ export function e2eChain(): E2EChain {
 }
 
 /** Dev accounts 5–9 pay for gas, one per Playwright worker, so funding never races on a nonce. */
-export const workerFunder = () => 5 + (Number(process.env.TEST_PARALLEL_INDEX ?? 0) % 5);
+export const GAS_FUNDERS = 5;
+export function workerFunder() {
+  const index = Number(process.env.TEST_PARALLEL_INDEX ?? 0);
+  if (index >= GAS_FUNDERS)
+    throw new Error(
+      `Worker ${index} has no gas funder of its own; run at most ${GAS_FUNDERS} workers`,
+    );
+  return 5 + index;
+}
 
 export const chainClient = () =>
   createPublicClient({ chain: baseSepolia, transport: http(E2E_RPC_URL) });
@@ -64,6 +73,7 @@ const abi = parseAbi([
   'function unlockAt(address account) view returns (uint256)',
   'function maxWithdraw(address account) view returns (uint256)',
   'function riskLevel() view returns (uint8)',
+  'function withdrawalCapacity() view returns (uint256)',
   'function setRiskState(uint8 level, uint256 capacity)',
 ]);
 
@@ -89,13 +99,23 @@ export async function operatorDeposit(executor: Address, vault: Address, amount:
   });
 }
 
-/** The risk admin (anvil account 1) marks a vault degraded or normal. */
+/** The risk admin (anvil account 1) marks a vault degraded or normal, withdrawals unlimited. */
 export const setVaultRisk = (vault: Address, degraded: boolean) =>
   send(devAccount(1), {
     address: vault,
     functionName: 'setRiskState',
-    args: [degraded ? 1 : 0, 10n ** 30n],
+    args: [degraded ? 1 : 0, maxUint256],
   });
+
+/** A vault's risk fixture state on chain; capacity null = unlimited. */
+export async function vaultCondition(vault: Address) {
+  const client = chainClient();
+  const [risk, capacity] = await Promise.all([
+    client.readContract({ address: vault, abi, functionName: 'riskLevel' }),
+    client.readContract({ address: vault, abi, functionName: 'withdrawalCapacity' }),
+  ]);
+  return { degraded: risk !== 0, capacity: capacity === maxUint256 ? null : capacity };
+}
 
 /** The executor state the API's dashboard reports, read from the latest block. */
 export async function executorSnapshot(executor: Address) {

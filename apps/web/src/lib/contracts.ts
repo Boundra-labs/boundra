@@ -29,5 +29,8 @@ const vaultErrors = liquidVaultAbi.filter(
 export const executorAbi = [...boundraExecutorAbi, ...tokenErrors, ...vaultErrors] as const;
 export { mockUSDCAbi as tokenAbi };
 
+/** Both mock vaults share one ABI (MockVault), including the risk-admin `setRiskState`. */
+export { liquidVaultAbi as vaultAbi };
+
 /** `claim()` mints through the token, so its errors (e.g. SupplyCapExceeded) can surface too. */
 export const faucetAbi = [...mockUSDCFaucetAbi, ...tokenErrors] as const;
