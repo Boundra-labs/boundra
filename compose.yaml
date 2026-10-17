@@ -18,6 +18,27 @@ services:
       retries: 15
     restart: unless-stopped
 
+  # Scheduled pg_dump backups into BACKUP_DIR (./backups by default; copy them off this host).
+  # One-off: pnpm db:backup. Restore drill: pnpm db:restore-drill.
+  backup:
+    profiles: [app]
+    image: postgres:17.9-alpine
+    environment:
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER:?Run pnpm env:setup first}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?Run pnpm env:setup first}
+      PGDATABASE: ${POSTGRES_DB:?Run pnpm env:setup first}
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-21600}
+      BACKUP_KEEP: ${BACKUP_KEEP:-28}
+    volumes:
+      - ./deploy/backup.sh:/usr/local/bin/boundra-backup.sh:ro
+      - ${BACKUP_DIR:-./backups}:/backups
+    entrypoint: ['/bin/sh', '/usr/local/bin/boundra-backup.sh']
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
   migrate:
     profiles: [app]
     build:

@@ -15,5 +15,6 @@ contracts/broadcast/
 playwright-report/
 test-results/
 tmp/
+backups/
 *.log
 .DS_Store

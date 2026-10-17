@@ -27,8 +27,27 @@ Stuck actions stay `RECONCILE` and are retried automatically; an operator EOA no
 - Changed database password: changing `.env` does not modify credentials in an existing PostgreSQL volume. Update the database role deliberately or restore a known backup; do not delete volumes to bypass this.
 - Stop local Compose services with `docker compose down`; omit `--volumes` to retain data.
 
+## Backups and restore
+
+**Schedule.** With `docker compose --profile app up`, the `backup` service runs `pg_dump` every `BACKUP_INTERVAL_SECONDS` (default 6 hours) into `BACKUP_DIR` (default `./backups`, gitignored) and keeps the newest `BACKUP_KEEP` dumps (default 28, about a week). `pnpm db:backup` takes one now, also against the plain local database. Each `boundra-<UTC stamp>.dump` comes with a `.sha256` file and a `.json` file of the migration count and per-table row counts.
+
+**Off-host copies are your job.** Backups on the same disk as the database do not survive losing that host. Copy `BACKUP_DIR` to separate storage on the same schedule; dumps contain user data (wallet addresses, intents, sessions), so keep that storage private.
+
+**Drill.** `pnpm db:restore-drill [file]` restores the newest (or given) dump into a separate, throwaway PostgreSQL container and checks the checksum, a clean `pg_restore`, every table's row count against the backup's record, and that `prisma migrate status` sees the schema as current. It writes `<dump>.drill.json` and removes the container. Run it after any backup or schema change and at least weekly.
+
+| Date (UTC)       | Backup                            | Result | Duration | Notes                                                                                      |
+| ---------------- | --------------------------------- | ------ | -------- | ------------------------------------------------------------------------------------------ |
+| 2026-10-17 06:37 | boundra-20261017T063658Z (230 KB) | passed | 10.2 s   | Local dev database, 23 tables. A corrupted byte and a wrong recorded count both failed it. |
+
+**Restoring for real.** Never restore over the live database first.
+
+1. Stop the worker, then the API (`docker compose stop worker api`), so nothing writes or signs meanwhile.
+2. Run the drill on the dump you intend to use.
+3. Restore into a new database, e.g. `createdb boundra_restored` then `pg_restore --no-owner --exit-on-error -d boundra_restored < file.dump` inside the `postgres` container, and point `DATABASE_URL` at it. Keep the old database until the service is verified.
+4. Start the API, check `/api/v1/health/ready`, then start the worker. A restored database can be behind the chain: the worker rescans from its saved cursor, and the executor itself rejects a second allocation (`BudgetExceeded`) or a reused action ID (`Replay`), as Person 2's chain E2E shows. Follow Person 2's worker recovery notes before letting it execute again.
+
 ## Before public deployment
 
-Person 3 must finish HTTPS/domain wiring, backup scheduling and a restore drill, monitoring/alerts, release identifiers and rollback instructions. Person 1/2 supply chain/worker recovery procedures after implementing them. `deploy/Caddyfile` is a reverse-proxy template, not an already configured production host.
+Person 3 must finish HTTPS/domain wiring, monitoring/alerts, release identifiers and rollback instructions. Person 1/2 supply chain/worker recovery procedures after implementing them. `deploy/Caddyfile` is a reverse-proxy template, not an already configured production host.
 
 Do not expose PostgreSQL or mount owner keys. Runtime secrets belong in the deployment secret facility. Local `.env` is gitignored and excluded from Docker builds.
