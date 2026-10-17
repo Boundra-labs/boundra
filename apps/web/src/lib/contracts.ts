@@ -4,6 +4,7 @@
  */
 import { boundraExecutorAbi } from '@boundra/chain/dist/abis/BoundraExecutor';
 import { boundraFactoryAbi } from '@boundra/chain/dist/abis/BoundraFactory';
+import { liquidVaultAbi } from '@boundra/chain/dist/abis/LiquidVault';
 import { mockUSDCAbi } from '@boundra/chain/dist/abis/MockUSDC';
 import { mockUSDCFaucetAbi } from '@boundra/chain/dist/abis/MockUSDCFaucet';
 
@@ -12,8 +13,20 @@ export { boundraFactoryAbi as factoryAbi };
 
 const tokenErrors = mockUSDCAbi.filter((item) => item.type === 'error');
 
-/** The token's errors are included so a failed `transferFrom` inside `fund` decodes too. */
-export const executorAbi = [...boundraExecutorAbi, ...tokenErrors] as const;
+/** Both vaults share these errors (e.g. PositionLocked, InsufficientCapacity). */
+const vaultErrors = liquidVaultAbi.filter(
+  (item) =>
+    item.type === 'error' &&
+    ![...tokenErrors, ...boundraExecutorAbi].some(
+      (known) => known.type === 'error' && known.name === item.name,
+    ),
+);
+
+/**
+ * The token's and vaults' errors are included so a failed transfer inside `fund`, or a vault
+ * refusing `ownerWithdraw`, decodes too.
+ */
+export const executorAbi = [...boundraExecutorAbi, ...tokenErrors, ...vaultErrors] as const;
 export { mockUSDCAbi as tokenAbi };
 
 /** `claim()` mints through the token, so its errors (e.g. SupplyCapExceeded) can surface too. */

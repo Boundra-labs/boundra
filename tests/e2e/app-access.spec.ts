@@ -50,18 +50,25 @@ test('without a browser wallet the app explains what is missing', async ({ page 
   await expect(problem(page, 'No browser wallet was found')).toBeVisible();
 });
 
-test('an unreachable API is reported instead of a sign-in prompt', async ({ page }) => {
+test('an unreachable API is reported, and the app recovers once it is back', async ({ page }) => {
+  let down = true;
   await page.route('**/api/v1/auth/session', (route) =>
-    route.fulfill({
-      status: 503,
-      json: { error: { code: 'DEPENDENCY_UNAVAILABLE', message: 'Unavailable' } },
-    }),
+    down
+      ? route.fulfill({
+          status: 503,
+          json: { error: { code: 'DEPENDENCY_UNAVAILABLE', message: 'Unavailable' } },
+        })
+      : route.fulfill({ status: 401, json: signedOut }),
   );
   await page.goto('/app');
   await expect(
     page.getByRole('heading', { name: 'Boundra is unavailable right now' }),
   ).toBeVisible();
   await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible();
+  down = false;
+  await expect(page.getByRole('heading', { name: 'Sign in to Boundra' })).toBeVisible({
+    timeout: 15_000,
+  });
 });
 
 test('owners switch to Base Sepolia, then sign in with a signature', async ({ page }) => {

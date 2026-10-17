@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { BrandMark } from '@/components/brand-mark';
 import { ServiceStatus } from '@/components/service-status';
@@ -13,6 +14,10 @@ function AccountMenu() {
   if (!current) return null;
   return (
     <div className="app-account">
+      <nav className="app-nav" aria-label="App">
+        <Link href="/app">Overview</Link>
+        <Link href="/app?new=1">New goal</Link>
+      </nav>
       <span className="app-account-address" title={current.address}>
         <span className="status-dot online" aria-hidden="true" />
         {shortAddress(current.address)}

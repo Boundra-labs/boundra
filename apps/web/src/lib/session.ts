@@ -41,6 +41,8 @@ export function useSession() {
     retry: (count, error) => !(error instanceof ApiError && error.status < 500) && count < 1,
     staleTime: 60_000,
     refetchOnWindowFocus: true,
+    // While the services are unreachable, keep checking so the app recovers by itself.
+    refetchInterval: (query) => (query.state.status === 'error' ? 10_000 : false),
   });
 }
 

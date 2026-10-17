@@ -116,6 +116,8 @@ export function useAccountReadiness(owner: Address) {
       Boolean(usdcTotal && usdcTotal > 0n) &&
       Boolean(registered && onchainExecutor) &&
       !executorMismatch,
+    /** Whether the owner already has a mandate (any status but superseded or rejected). */
+    hasMandate: Boolean(dashboard.data?.mandate),
     refresh,
   };
 }

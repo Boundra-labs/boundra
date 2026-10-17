@@ -4,7 +4,8 @@ import type { Hash } from 'viem';
 import { usePublicConfig } from '@/lib/public-config';
 import type { TransactionState } from '@/lib/transactions';
 
-function TxLink({ hash }: { hash: Hash }) {
+/** A transaction hash, linked to the configured explorer. */
+export function TxLink({ hash }: { hash: Hash }) {
   const config = usePublicConfig();
   const short = `${hash.slice(0, 10)}…${hash.slice(-6)}`;
   if (!config.data?.explorer) return <code>{short}</code>;

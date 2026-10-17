@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import type { Address } from 'viem';
-import { e2eChain, executorOf, prepareOwner, type E2EChain } from './chain';
+import { e2eChain, executorOf, executorSnapshot, prepareOwner, type E2EChain } from './chain';
 import { installTestWallet } from './wallet';
 
 /**
@@ -78,6 +78,49 @@ export async function mockAccountApi(
       });
     executor = found;
     return route.fulfill({ json: { address: found.toLowerCase(), verifiedAtBlock: '1' } });
+  });
+}
+
+/**
+ * `GET /dashboard` for an owner with a mandate, with chain state read live from the E2E chain
+ * (the real API reads it at its confirmation depth).
+ */
+export async function mockDashboardApi(
+  page: Page,
+  {
+    owner,
+    executor,
+    mandate,
+  }: { owner: Address; executor: Address; mandate: Record<string, unknown> },
+) {
+  await page.route('**/api/v1/dashboard', async (route) =>
+    route.fulfill({
+      json: {
+        labels: ['TESTNET', 'MockUSDC', 'Mock vault', 'Illustrative yield only'],
+        owner: owner.toLowerCase(),
+        executor: executor.toLowerCase(),
+        mandate,
+        chainStatus: 'ok',
+        chain: await executorSnapshot(executor),
+      },
+    }),
+  );
+}
+
+/** `GET /activity` over a fixed list (newest first), paged like the API with `before`/`limit`. */
+export async function mockActivity(page: Page, items: Record<string, unknown>[]) {
+  await page.route('**/api/v1/activity*', (route) => {
+    const url = new URL(route.request().url());
+    const limit = Number(url.searchParams.get('limit') ?? 50);
+    const before = url.searchParams.get('before');
+    const start = before ? items.findIndex((item) => item.id === before) + 1 : 0;
+    const page = items.slice(start, start + limit);
+    return route.fulfill({
+      json: {
+        items: page,
+        nextBefore: page.length === limit && start + limit < items.length ? page.at(-1)!.id : null,
+      },
+    });
   });
 }
 

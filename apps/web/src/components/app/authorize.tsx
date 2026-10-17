@@ -1,10 +1,12 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, type ReactNode } from 'react';
 import type { Address } from 'viem';
 import { formatMockUsdc } from '@/lib/amount';
 import { useAuthorizationCheck, useAuthorizationState } from '@/lib/authorization';
 import { executorAbi, tokenAbi, toMandateStruct } from '@/lib/contracts';
+import { DASHBOARD_KEY } from '@/lib/dashboard';
 import { useMandate, type MandateView } from '@/lib/mandates';
 import { isBusy, useOwnerTransaction, type RevertExplainer } from '@/lib/transactions';
 import { useOwnerSession } from './access-gate';
@@ -83,6 +85,12 @@ export function Authorize({ view }: { view: MandateView }) {
     requested.current = true;
     check.mutate(setMandate.state.phase === 'confirmed' ? setMandate.state.hash : undefined);
   }, [verifying, check, setMandate.state]);
+
+  // The overview reads the latest mandate; refresh it once this one is authorized.
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    if (authorized) void queryClient.invalidateQueries({ queryKey: DASHBOARD_KEY });
+  }, [authorized, queryClient]);
 
   const expired = Number(view.tuple.expiresAt) * 1000 <= Date.now();
   if (chain.loading)

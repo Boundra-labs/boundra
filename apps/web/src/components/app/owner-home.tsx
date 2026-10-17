@@ -5,6 +5,7 @@ import { formatMockUsdc } from '@/lib/amount';
 import { useAccountReadiness, type AccountReadiness } from '@/lib/readiness';
 import { useOwnerSession } from './access-gate';
 import { AccountSetup } from './account-setup';
+import { Dashboard } from './dashboard';
 import { shortAddress } from './format';
 import { StartIntent } from './start-intent';
 
@@ -50,8 +51,12 @@ function Aside({ readiness }: { readiness: AccountReadiness }) {
   );
 }
 
-/** `/app`: one-time account setup until the owner is ready, then a new goal. */
-export function OwnerHome({ initialGoal }: { initialGoal: string }) {
+/**
+ * `/app`: one-time account setup until the owner is ready; then the overview of their mandate,
+ * or a new goal when there is none yet, when they asked for one (`startNew`) or arrived with a
+ * goal typed on the homepage.
+ */
+export function OwnerHome({ initialGoal, startNew }: { initialGoal: string; startNew: boolean }) {
   const session = useOwnerSession();
   const owner = session.address as Address;
   const readiness = useAccountReadiness(owner);
@@ -83,6 +88,8 @@ export function OwnerHome({ initialGoal }: { initialGoal: string }) {
         )}
       </section>
     );
+
+  if (readiness.ready && readiness.hasMandate && !startNew && !initialGoal) return <Dashboard />;
 
   return (
     <div className="flow">

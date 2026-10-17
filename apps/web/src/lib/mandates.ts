@@ -3,6 +3,7 @@
 import type { MandateTuple } from '@boundra/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from './api';
+import { DASHBOARD_KEY } from './dashboard';
 import type { VaultKey } from './intents';
 
 export type MandateStatus =
@@ -113,6 +114,7 @@ export function useCreateDraft(intentId: string, csrfToken: string) {
     onSuccess: (result) => {
       if (!isEscalation(result)) queryClient.setQueryData(mandateKey(result.id), result);
       else void queryClient.invalidateQueries({ queryKey: ['intent', intentId] });
+      void queryClient.invalidateQueries({ queryKey: DASHBOARD_KEY });
     },
   });
 }
@@ -130,6 +132,7 @@ export function useReviseDraft(id: string, csrfToken: string) {
     onSuccess: (result) => {
       if (!isEscalation(result)) queryClient.setQueryData(mandateKey(result.id), result);
       void queryClient.invalidateQueries({ queryKey: mandateKey(id) });
+      void queryClient.invalidateQueries({ queryKey: DASHBOARD_KEY });
     },
   });
 }
@@ -144,7 +147,10 @@ export function useApprove(id: string, csrfToken: string) {
         csrfToken,
         body: { previewHash },
       }),
-    onSuccess: (view) => queryClient.setQueryData(mandateKey(id), view),
+    onSuccess: (view) => {
+      queryClient.setQueryData(mandateKey(id), view);
+      void queryClient.invalidateQueries({ queryKey: DASHBOARD_KEY });
+    },
     onError: () => queryClient.invalidateQueries({ queryKey: mandateKey(id) }),
   });
 }
