@@ -42,6 +42,11 @@
                   "address": {
                     "type": "string",
                     "pattern": "^0x[0-9a-fA-F]{40}$"
+                  },
+                  "client": {
+                    "default": "browser",
+                    "type": "string",
+                    "enum": ["browser", "token"]
                   }
                 },
                 "required": ["address"],
@@ -55,7 +60,7 @@
             "description": ""
           }
         },
-        "summary": "Issue a single-use SIWE (EIP-4361) challenge for an EOA",
+        "summary": "Issue a single-use SIWE (EIP-4361) challenge for an EOA; client \"token\" is for SDK and MCP clients",
         "tags": ["auth"]
       }
     },
@@ -92,7 +97,7 @@
             "description": ""
           }
         },
-        "summary": "Verify a signed challenge and start a session (not a mandate approval)",
+        "summary": "Verify a signed challenge and start a session (not a mandate approval): a cookie, or an API token for a \"token\" challenge",
         "tags": ["auth"]
       }
     },
@@ -107,10 +112,13 @@
         },
         "security": [
           {
+            "bearer": []
+          },
+          {
             "__Host-boundra_session": []
           }
         ],
-        "summary": "Current session and its CSRF token",
+        "summary": "Current session and, for the web app, its CSRF token",
         "tags": ["auth"]
       }
     },
@@ -125,9 +133,13 @@
         },
         "security": [
           {
+            "bearer": []
+          },
+          {
             "__Host-boundra_session": []
           }
         ],
+        "summary": "End this session, or revoke this API token",
         "tags": ["auth"]
       }
     },
@@ -580,8 +592,8 @@
   },
   "info": {
     "title": "Boundra API",
-    "description": "Base Sepolia testnet prototype. Session cookie auth via SIWE; state-changing requests need X-CSRF-Token and an allowed Origin. Amounts are base-unit strings.",
-    "version": "0.2.0",
+    "description": "Base Sepolia testnet prototype. Sign in with SIWE. The web app uses the session cookie, and its state-changing requests need X-CSRF-Token and an allowed Origin. SDK and MCP clients sign a \"token\" challenge and send the API token as Authorization: Bearer on owner routes (admin routes need the browser session). Amounts are base-unit strings.",
+    "version": "0.3.0",
     "contact": {}
   },
   "tags": [],
@@ -592,6 +604,11 @@
         "type": "apiKey",
         "in": "cookie",
         "name": "__Host-boundra_session"
+      },
+      "bearer": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "type": "http"
       }
     },
     "schemas": {}

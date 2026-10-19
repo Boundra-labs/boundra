@@ -12,10 +12,11 @@ export function openApiDocument(app: NestExpressApplication) {
     new DocumentBuilder()
       .setTitle('Boundra API')
       .setDescription(
-        'Base Sepolia testnet prototype. Session cookie auth via SIWE; state-changing requests need X-CSRF-Token and an allowed Origin. Amounts are base-unit strings.',
+        'Base Sepolia testnet prototype. Sign in with SIWE. The web app uses the session cookie, and its state-changing requests need X-CSRF-Token and an allowed Origin. SDK and MCP clients sign a "token" challenge and send the API token as Authorization: Bearer on owner routes (admin routes need the browser session). Amounts are base-unit strings.',
       )
-      .setVersion('0.2.0')
+      .setVersion('0.3.0')
       .addCookieAuth('__Host-boundra_session')
+      .addBearerAuth()
       .build(),
   );
 }

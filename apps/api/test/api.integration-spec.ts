@@ -229,6 +229,80 @@ describe('Boundra API (PostgreSQL)', () => {
       expect(expired.body.error.code).toBe('CHALLENGE_INVALID');
     });
 
+    it('issues an API token for a token challenge, with its own consent wording', async () => {
+      const account = newAccount();
+      addresses.push(account.address.toLowerCase());
+      const challenge = await http()
+        .post('/api/v1/auth/challenge')
+        .send({ address: account.address, client: 'token' });
+      expect(challenge.status).toBe(201);
+      expect(challenge.body.message).toContain('API token');
+      expect(challenge.body.message).toContain('cannot sign transactions or move funds');
+      const verified = await http()
+        .post('/api/v1/auth/verify')
+        .send({
+          message: challenge.body.message,
+          signature: await account.signMessage({ message: challenge.body.message }),
+        });
+      expect(verified.status).toBe(200);
+      expect(verified.headers['set-cookie']).toBeUndefined();
+      expect(verified.body).toMatchObject({ address: account.address.toLowerCase() });
+      expect(verified.body.csrfToken).toBeUndefined();
+      const bearer = `Bearer ${verified.body.token}`;
+      // No Origin or CSRF token: a browser never attaches this header on its own.
+      const created = await http()
+        .post('/api/v1/intents')
+        .set('Authorization', bearer)
+        .send(intentBody);
+      expect(created.status).toBe(201);
+      const session = await http().get('/api/v1/auth/session').set('Authorization', bearer);
+      expect(session.body).toEqual({
+        address: account.address.toLowerCase(),
+        kind: 'token',
+        csrfToken: null,
+        admin: false,
+      });
+      // The token is not a cookie, and the cookie is not a token.
+      const asCookie = await http()
+        .get('/api/v1/dashboard')
+        .set('Cookie', `__Host-boundra_session=${verified.body.token}`);
+      expect(asCookie.status).toBe(401);
+      const browser = await login();
+      const cookieToken = browser.cookie.split('=')[1]!;
+      const asBearer = await http()
+        .get('/api/v1/dashboard')
+        .set('Authorization', `Bearer ${cookieToken}`);
+      expect(asBearer.status).toBe(401);
+      // A bad bearer token is rejected even next to a valid cookie.
+      const mixed = await http()
+        .get('/api/v1/dashboard')
+        .set('Cookie', browser.cookie)
+        .set('Authorization', 'Bearer not-a-token');
+      expect(mixed.status).toBe(401);
+      expect((await http().post('/api/v1/auth/logout').set('Authorization', bearer)).status).toBe(
+        204,
+      );
+      expect((await http().get('/api/v1/dashboard').set('Authorization', bearer)).status).toBe(401);
+    });
+
+    it('rejects a signed statement that is not one of ours', async () => {
+      const account = newAccount();
+      addresses.push(account.address.toLowerCase());
+      const challenge = await http()
+        .post('/api/v1/auth/challenge')
+        .send({ address: account.address, client: 'token' });
+      const altered = challenge.body.message.replace(
+        /^Give an app.*$/m,
+        'Sign in to Boundra. Totally harmless.',
+      );
+      expect(altered).not.toBe(challenge.body.message);
+      const verified = await http()
+        .post('/api/v1/auth/verify')
+        .send({ message: altered, signature: await account.signMessage({ message: altered }) });
+      expect(verified.status).toBe(401);
+      expect(verified.body.error.code).toBe('CHALLENGE_INVALID');
+    });
+
     it('requires a session, and logout revokes it', async () => {
       expect((await http().get('/api/v1/dashboard')).body.error.code).toBe('UNAUTHENTICATED');
       const s = await login();
@@ -453,6 +527,23 @@ describe('Boundra API (PostgreSQL)', () => {
       expect(denied.status).toBe(403);
       const root = await login(admin);
       expect((await as(root).get('/auth/session')).body.admin).toBe(true);
+      // Admin actions need the admin's browser session, not an API token.
+      const challenge = await http()
+        .post('/api/v1/auth/challenge')
+        .send({ address: admin.address, client: 'token' });
+      const { token } = (
+        await http()
+          .post('/api/v1/auth/verify')
+          .send({
+            message: challenge.body.message,
+            signature: await admin.signMessage({ message: challenge.body.message }),
+          })
+      ).body;
+      const viaToken = await http()
+        .post('/api/v1/admin/demo/reset')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ ownerAddress: user.address });
+      expect(viaToken.status).toBe(403);
       const reset = await as(root).post('/admin/demo/reset', { ownerAddress: user.address });
       expect(reset.body).toEqual({ intents: 1, mandates: 0 });
       expect((await as(user).get(`/intents/${created.body.id}`)).body.state).toBe('REJECTED');

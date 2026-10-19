@@ -9,6 +9,18 @@ REST API under `/api/v1` (NestJS). The machine-readable contract is [openapi.jso
 3. Every non-public route needs the cookie. Every `POST`/`PATCH` also needs the `Origin` header equal to `WEB_ORIGIN` and `X-CSRF-Token: <csrfToken>`. `GET /auth/session` re-issues the CSRF token after a page reload.
 4. The owner is always taken from the session; addresses in request bodies are never used for authorization. Another owner's resources return `404`.
 
+### API tokens (SDK and MCP clients)
+
+Apps and AI assistants that are not the Boundra web app sign in with an API token instead of the cookie:
+
+1. `POST /auth/challenge {address, client: "token"}` returns a SIWE message whose statement tells the owner what they are granting: an API token that can read their account and prepare mandates for review, and that cannot sign transactions or move funds.
+2. The owner's wallet signs it. `POST /auth/verify {message, signature}` returns `{address, token, expiresAt}` and sets no cookie. The statement the owner signed decides the session kind, so an altered statement is rejected (`CHALLENGE_INVALID`).
+3. Send `Authorization: Bearer <token>` on owner routes. No `Origin` or `X-CSRF-Token` is needed: a browser never attaches this header on its own, and CORS still admits only `WEB_ORIGIN`.
+4. A token is never accepted as the cookie, and a cookie is never accepted as a token. A malformed or revoked bearer token is rejected even if a valid cookie is also present. Admin routes need the admin's browser session.
+5. `POST /auth/logout` with the token revokes it. Tokens last `SESSION_TTL_HOURS`, like browser sessions.
+
+The token acts as the owner in the API only. Everything that changes the chain (`createExecutor`, `setMandate`, funding, pause, revoke, withdrawals) still needs the owner's own wallet signature.
+
 Serve web and API from one origin (Caddy in production; in development and the Compose stack the web app's `/api/v1/*` route handler forwards to `API_INTERNAL_URL`) so the cookie is first-party. Bodies are limited to 16 KB; login routes allow 10 requests/minute per client and other routes 120.
 
 ## Errors

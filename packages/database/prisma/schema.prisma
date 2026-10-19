@@ -119,10 +119,18 @@ model AuthChallenge {
   @@index([expiresAt])
 }
 
+// COOKIE: the web app's HttpOnly session (Origin + CSRF checked). TOKEN: a bearer API token for
+// SDK and MCP clients, issued only for a challenge whose signed statement says so.
+enum SessionKind {
+  COOKIE
+  TOKEN
+}
+
 model AuthSession {
   id            String         @id @default(uuid()) @db.Uuid
   tokenHash     String         @unique @db.VarChar(64)
   csrfTokenHash String         @db.VarChar(64)
+  kind          SessionKind    @default(COOKIE)
   ownerId       String         @db.Uuid
   owner         WalletIdentity @relation(fields: [ownerId], references: [id])
   expiresAt     DateTime       @db.Timestamptz(3)
