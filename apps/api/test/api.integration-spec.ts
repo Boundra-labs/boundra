@@ -220,9 +220,10 @@ describe('Boundra API (PostgreSQL)', () => {
         .send({ message: phishing, signature: await account.signMessage({ message: phishing }) });
       expect(foreign.body.error.code).toBe('CHALLENGE_INVALID');
 
+      // Well in the past: the database compares with its own clock, which may lag this host's.
       await db.authChallenge.updateMany({
         where: { address: account.address.toLowerCase() },
-        data: { expiresAt: new Date(Date.now() - 1000) },
+        data: { expiresAt: new Date(Date.now() - 60_000) },
       });
       const expired = await http()
         .post('/api/v1/auth/verify')
