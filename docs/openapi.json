@@ -122,6 +122,42 @@
         "tags": ["auth"]
       }
     },
+    "/api/v1/auth/tokens": {
+      "get": {
+        "operationId": "AuthController_tokens",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "__Host-boundra_session": []
+          }
+        ],
+        "summary": "Live API tokens this owner gave to apps and AI assistants (web app)",
+        "tags": ["auth"]
+      }
+    },
+    "/api/v1/auth/tokens/{id}/revoke": {
+      "post": {
+        "operationId": "AuthController_revokeToken",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "__Host-boundra_session": []
+          }
+        ],
+        "summary": "Revoke one of your API tokens at once (web app)",
+        "tags": ["auth"]
+      }
+    },
     "/api/v1/auth/logout": {
       "post": {
         "operationId": "AuthController_logout",

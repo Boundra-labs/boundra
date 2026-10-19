@@ -18,6 +18,7 @@ Apps and AI assistants that are not the Boundra web app sign in with an API toke
 3. Send `Authorization: Bearer <token>` on owner routes. No `Origin` or `X-CSRF-Token` is needed: a browser never attaches this header on its own, and CORS still admits only `WEB_ORIGIN`.
 4. A token is never accepted as the cookie, and a cookie is never accepted as a token. A malformed or revoked bearer token is rejected even if a valid cookie is also present. Admin routes need the admin's browser session.
 5. `POST /auth/logout` with the token revokes it. Tokens last `SESSION_TTL_HOURS`, like browser sessions.
+6. In the web app (browser session only), `GET /auth/tokens` lists the owner's live tokens (`id`, `createdAt`, `expiresAt`, `lastSeenAt`; never values, which are stored only as hashes) and `POST /auth/tokens/:id/revoke` revokes one at once. The app's **Apps & AI** page (`/app/connect`) creates, shows once and revokes tokens.
 
 The token acts as the owner in the API only. Everything that changes the chain (`createExecutor`, `setMandate`, funding, pause, revoke, withdrawals) still needs the owner's own wallet signature.
 

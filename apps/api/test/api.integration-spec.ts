@@ -278,6 +278,11 @@ describe('Boundra API (PostgreSQL)', () => {
         .get('/api/v1/dashboard')
         .set('Authorization', `Bearer ${cookieToken}`);
       expect(asBearer.status).toBe(401);
+      // The owner sees and revokes tokens from the web app only, and only their own.
+      const listed = await as(browser).get('/auth/tokens');
+      expect(listed.body.items).toEqual([]);
+      const own = await http().get('/api/v1/auth/tokens').set('Authorization', bearer);
+      expect(own.status).toBe(403);
       // A bad bearer token is rejected even next to a valid cookie.
       const mixed = await http()
         .get('/api/v1/dashboard')
@@ -288,6 +293,46 @@ describe('Boundra API (PostgreSQL)', () => {
         204,
       );
       expect((await http().get('/api/v1/dashboard').set('Authorization', bearer)).status).toBe(401);
+    });
+
+    it('lets the owner list and revoke the tokens they gave out, and nobody else’s', async () => {
+      const s = await login();
+      const challenge = await http()
+        .post('/api/v1/auth/challenge')
+        .send({ address: s.account.address, client: 'token' });
+      const { token } = (
+        await http()
+          .post('/api/v1/auth/verify')
+          .send({
+            message: challenge.body.message,
+            signature: await s.account.signMessage({ message: challenge.body.message }),
+          })
+      ).body;
+      const listed = await as(s).get('/auth/tokens');
+      expect(listed.body.items).toHaveLength(1);
+      expect(Object.keys(listed.body.items[0]).sort()).toEqual([
+        'createdAt',
+        'expiresAt',
+        'id',
+        'lastSeenAt',
+      ]);
+      const id = listed.body.items[0].id;
+      const other = await login();
+      expect((await as(other).post(`/auth/tokens/${id}/revoke`)).status).toBe(404);
+      expect((await as(s).post('/auth/tokens/not-a-uuid/revoke')).status).toBe(404);
+      // The browser session itself is not a token and cannot be revoked here.
+      const self = await db.authSession.findFirstOrThrow({
+        where: { owner: { address: s.address }, kind: 'COOKIE' },
+      });
+      expect((await as(s).post(`/auth/tokens/${self.id}/revoke`)).status).toBe(404);
+      expect(
+        (await http().get('/api/v1/dashboard').set('Authorization', `Bearer ${token}`)).status,
+      ).toBe(200);
+      expect((await as(s).post(`/auth/tokens/${id}/revoke`)).status).toBe(204);
+      expect(
+        (await http().get('/api/v1/dashboard').set('Authorization', `Bearer ${token}`)).status,
+      ).toBe(401);
+      expect((await as(s).get('/auth/tokens')).body.items).toEqual([]);
     });
 
     it('rejects a signed statement that is not one of ours', async () => {

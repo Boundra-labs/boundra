@@ -6,7 +6,7 @@ import { BASE_SEPOLIA_CHAIN_ID } from '@boundra/shared';
 import { APP_CONFIG, type AppConfig } from '../config';
 import { DatabaseService } from '../database.service';
 import { ApiError } from '../common/errors';
-import type { AuthenticatedOwner, SessionKind } from '../common/request';
+import { isUuid, type AuthenticatedOwner, type SessionKind } from '../common/request';
 
 export const SESSION_COOKIE = '__Host-boundra_session';
 const sha256 = (value: string) => createHash('sha256').update(value).digest('hex');
@@ -175,6 +175,25 @@ export class AuthService {
       sessionId: session.id,
       kind: session.kind,
     };
+  }
+
+  /** The owner's live API tokens (never their values, which are only stored hashed). */
+  listTokens(ownerId: string) {
+    return this.database.client.authSession.findMany({
+      where: { ownerId, kind: 'TOKEN', revokedAt: null, expiresAt: { gt: new Date() } },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, createdAt: true, expiresAt: true, lastSeenAt: true },
+    });
+  }
+
+  /** Revokes one of the owner's API tokens; false when there is no such live token. */
+  async revokeToken(ownerId: string, tokenId: string) {
+    if (!isUuid(tokenId)) return false;
+    const result = await this.database.client.authSession.updateMany({
+      where: { id: tokenId, ownerId, kind: 'TOKEN', revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    return result.count === 1;
   }
 
   async revoke(sessionId: string) {

@@ -1,9 +1,20 @@
-import { Body, Controller, Get, HttpCode, Inject, Post, Res } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Inject,
+  Param,
+  Post,
+  Res,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiCookieAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { z } from 'zod';
 import { addressSchema } from '@boundra/shared';
 import { APP_CONFIG, type AppConfig } from '../config';
+import { ApiError, notFound } from '../common/errors';
 import {
   AuthThrottle,
   CurrentOwner,
@@ -16,6 +27,17 @@ import { AuthService, SESSION_COOKIE, sessionCookie } from './auth.service';
 const challengeSchema = z
   .object({ address: addressSchema, client: z.enum(['browser', 'token']).default('browser') })
   .strict();
+/** API tokens are managed by the owner in the web app, never by another token. */
+function browserOnly(owner: AuthenticatedOwner) {
+  if (owner.kind !== 'COOKIE')
+    throw new ApiError(
+      HttpStatus.FORBIDDEN,
+      'FORBIDDEN',
+      'API tokens are managed in the Boundra app',
+      'Open the app, sign in with your wallet and use “Connect an app or AI assistant”.',
+    );
+}
+
 const verifySchema = z
   .object({
     message: z.string().min(1).max(2000),
@@ -85,6 +107,31 @@ export class AuthController {
       csrfToken: browser ? this.auth.csrfFor(owner.sessionId) : null,
       admin: browser && this.auth.isAdmin(owner.address),
     };
+  }
+
+  @Get('tokens')
+  @ApiCookieAuth(SESSION_COOKIE)
+  @ApiOperation({ summary: 'Live API tokens this owner gave to apps and AI assistants (web app)' })
+  async tokens(@CurrentOwner() owner: AuthenticatedOwner) {
+    browserOnly(owner);
+    const items = await this.auth.listTokens(owner.id);
+    return {
+      items: items.map((t) => ({
+        id: t.id,
+        createdAt: t.createdAt.toISOString(),
+        expiresAt: t.expiresAt.toISOString(),
+        lastSeenAt: t.lastSeenAt.toISOString(),
+      })),
+    };
+  }
+
+  @Post('tokens/:id/revoke')
+  @HttpCode(204)
+  @ApiCookieAuth(SESSION_COOKIE)
+  @ApiOperation({ summary: 'Revoke one of your API tokens at once (web app)' })
+  async revokeToken(@CurrentOwner() owner: AuthenticatedOwner, @Param('id') id: string) {
+    browserOnly(owner);
+    if (!(await this.auth.revokeToken(owner.id, id))) throw notFound('API token');
   }
 
   @Post('logout')
