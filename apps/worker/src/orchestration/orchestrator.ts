@@ -300,6 +300,24 @@ export class Orchestrator {
     trigger: string,
   ): Promise<string> {
     const executor = m.executor!.address;
+    const operator = this.deps.execution?.operator.toLowerCase();
+    const ownerChosen =
+      (m.preview as { operatorSource?: string } | null)?.operatorSource === 'OWNER';
+    if (ownerChosen || (operator && m.operator.toLowerCase() !== operator)) {
+      // The owner named their own agent: it acts with its own key. Boundra's agent keeps
+      // monitoring (risk, expiry, escalation) but never transacts for this mandate.
+      await this.recordPassiveDecision(
+        m,
+        {
+          kind: 'HOLD',
+          reasonCode: `OWNER_AGENT_${decision.kind}`,
+          reason: `This mandate names your own agent; Boundra's agent does not act on it. A ${decision.kind.toLowerCase()} is within the mandate.`,
+        },
+        s,
+        trigger,
+      );
+      return 'OWNER_AGENT';
+    }
     if (this.deps.mode !== 'execute') {
       // Monitor-only workers record what they would do but never queue a transaction.
       await this.recordPassiveDecision(

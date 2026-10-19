@@ -427,6 +427,29 @@ describe('agent loop', () => {
     );
   });
 
+  test('Boundra’s agent never transacts for a mandate that names the owner’s own agent', async () => {
+    for (const mode of ['execute', 'monitor_only'] as const) {
+      const w = await world(mode);
+      const agent = randomAddress().toLowerCase();
+      const row = await db.mandate.update({
+        where: { id: w.draft.id },
+        data: { operator: agent, preview: { operatorSource: 'OWNER' } },
+      });
+      await db.mandate.update({
+        where: { id: row.id },
+        data: { mandateHash: hashMandate(mandateTupleFromRow(row)) },
+      });
+      w.snapshot.mandate.operator = agent as Hex;
+      w.authorizeOnChain();
+      assert.equal(await w.orchestrator.verifyAuthorization(w.draft.id), 'AUTHORIZED');
+      assert.equal(await w.orchestrator.evaluateMandate(w.draft.id, 'tick'), 'OWNER_AGENT');
+      assert.equal((await w.proposals()).length, 0);
+      assert.equal(w.chain.sent.length, 0);
+      const [decision] = await db.decision.findMany({ where: { mandateId: w.draft.id } });
+      assert.equal(decision?.reasonCode, 'OWNER_AGENT_DEPOSIT');
+    }
+  });
+
   test('a monitor-only worker records intent but never proposes a transaction', async () => {
     const w = await authorized('monitor_only');
     assert.equal(await w.orchestrator.evaluateMandate(w.draft.id, 'tick'), 'EXECUTION_DISABLED');

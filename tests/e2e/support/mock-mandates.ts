@@ -36,14 +36,18 @@ export async function mockMandates(
     executor,
     vault = 'LIQUID',
     amount = 300_000_000n,
+    agent,
   }: {
     owner: Address;
     executor: Address;
     vault?: Vault;
     amount?: bigint;
+    /** The owner's own agent as operator, instead of Boundra's. */
+    agent?: Address;
   },
 ) {
-  const { manifest, operator } = e2eChain();
+  const { manifest, operator: boundraOperator } = e2eChain();
+  const operator = agent ?? boundraOperator;
   const drafts = new Map<string, Draft>();
   let escalate = false;
   let stale = false;
@@ -63,6 +67,10 @@ export async function mockMandates(
       notices.push(
         `${v.name} locks deposits for 30 days with no early exit, even if a risk warning appears.`,
       );
+    if (agent)
+      notices.unshift(
+        'You chose the agent for this mandate yourself. Boundra does not run it or vouch for it; your executor contract still enforces every limit here, and you can pause or revoke it at any time.',
+      );
     const preview = {
       version: 'preview-v1',
       descriptorVersion: 'v1',
@@ -70,6 +78,7 @@ export async function mockMandates(
       network: { chainId: 84532, name: 'Base Sepolia (testnet)' },
       owner: owner.toLowerCase(),
       operator: operator.toLowerCase(),
+      ...(agent ? { operatorSource: 'OWNER' as const } : {}),
       executor: executor.toLowerCase(),
       beneficiary: owner.toLowerCase(),
       token: { address: manifest.mockUsdc.toLowerCase(), symbol: 'MockUSDC', decimals: 6 },

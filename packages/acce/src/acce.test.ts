@@ -202,6 +202,25 @@ describe('mandate builder', () => {
     );
     expect(code(() => build(liquidState, { amount: 0n }))).toBe('INVALID_AMOUNT');
     expect(code(() => build(liquidState, { operator: addresses.owner }))).toBe('OPERATOR_IS_OWNER');
+    const executor = '0x6666666666666666666666666666666666666666';
+    expect(code(() => build(liquidState, { executor, operator: executor }))).toBe(
+      'OPERATOR_IS_EXECUTOR',
+    );
+    expect(code(() => build(liquidState, { operator: `0x${'0'.repeat(40)}` }))).toBe(
+      'OPERATOR_IS_ZERO',
+    );
+  });
+
+  it('marks an owner-chosen agent in the hashed preview and warns about it first', () => {
+    const boundra = build(liquidState);
+    const own = build(liquidState, { ownerChosenOperator: true });
+    expect(boundra.ok && own.ok).toBe(true);
+    if (!boundra.ok || !own.ok) return;
+    expect(boundra.preview.operatorSource).toBeUndefined();
+    expect(own.preview.operatorSource).toBe('OWNER');
+    expect(own.preview.notices[0]).toMatch(/You chose the agent .* Boundra does not run it/);
+    expect(own.tuple).toEqual(boundra.tuple);
+    expect(own.previewHash).not.toBe(boundra.previewHash);
   });
 
   it('binds approval to the exact preview: any change alters the preview hash', () => {

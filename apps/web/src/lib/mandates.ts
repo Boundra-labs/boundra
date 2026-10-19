@@ -18,6 +18,8 @@ export interface MandatePreview {
   network: { chainId: number; name: string };
   owner: string;
   operator: string;
+  /** 'OWNER' when the owner named their own agent; absent for Boundra's agent. */
+  operatorSource?: 'OWNER';
   executor: string | null;
   beneficiary: string;
   token: { address: string; symbol: string; decimals: number };

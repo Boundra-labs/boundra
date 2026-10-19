@@ -17,6 +17,8 @@ const randomAddress = () => `0x${randomBytes(20).toString('hex')}`;
 
 class FakeGateway implements ChainGateway {
   configured = true;
+  /** False: this deployment runs no Boundra agent (OPERATOR_ADDRESS unset). */
+  boundraAgent = true;
   executors = new Map<string, string>();
   balances = new Map<string, bigint>();
   readonly manifest = {
@@ -38,7 +40,9 @@ class FakeGateway implements ChainGateway {
   };
   readonly operator = '0x00000000000000000000000000000000000000d1';
   deployment() {
-    return this.configured ? { manifest: this.manifest, operator: this.operator } : null;
+    return this.configured
+      ? { manifest: this.manifest, operator: this.boundraAgent ? this.operator : null }
+      : null;
   }
   async findExecutor(owner: string) {
     const address = this.executors.get(owner.toLowerCase());
@@ -386,6 +390,72 @@ describe('Boundra API (PostgreSQL)', () => {
   });
 
   describe('clarification → draft → approval', () => {
+    /** A signed-in owner with a registered executor and an intent ready for a draft. */
+    async function readyForDraft() {
+      const s = await login();
+      gateway.executors.set(s.address, randomAddress());
+      expect((await as(s).post('/executors/register')).status).toBe(200);
+      const created = await as(s).post('/intents', intentBody);
+      await as(s).post(`/intents/${created.body.id}/answers`, {
+        questionId: created.body.question.questionId,
+        alternativeId: 'no_lockup',
+      });
+      return { s, intentId: created.body.id as string };
+    }
+
+    it('lets the owner name their own agent, marks it in the preview and keeps it across edits', async () => {
+      const { s, intentId } = await readyForDraft();
+      const agent = randomAddress();
+      const own = await as(s).post(`/intents/${intentId}/mandate-drafts`, { operator: agent });
+      expect(own.status).toBe(201);
+      expect(own.body.tuple.operator).toBe(agent);
+      expect(own.body.preview.operatorSource).toBe('OWNER');
+      expect(own.body.preview.notices[0]).toMatch(/You chose the agent/);
+      const edited = await as(s).patch(`/mandate-drafts/${own.body.id}`, { expiryDays: 6 });
+      expect(edited.body.tuple.operator).toBe(agent);
+      expect(edited.body.preview.operatorSource).toBe('OWNER');
+      const back = await as(s).patch(`/mandate-drafts/${edited.body.id}`, {
+        operator: gateway.operator,
+      });
+      expect(back.body.tuple.operator).toBe(gateway.operator);
+      expect(back.body.preview.operatorSource).toBeUndefined();
+
+      for (const operator of [
+        gateway.manifest.riskAdmin,
+        gateway.manifest.liquidVault,
+        s.address,
+      ]) {
+        const refused = await as(s).post(`/intents/${intentId}/mandate-drafts`, { operator });
+        expect(refused.status).toBe(400);
+        expect(refused.body.error.code).toBe('VALIDATION_FAILED');
+      }
+      const executor = gateway.executors.get(s.address)!;
+      const asExecutor = await as(s).post(`/intents/${intentId}/mandate-drafts`, {
+        operator: executor,
+      });
+      expect(asExecutor.body.error.message).toBe('Invalid mandate: OPERATOR_IS_EXECUTOR');
+    });
+
+    it('needs the owner’s own agent when the deployment runs no Boundra agent', async () => {
+      const { s, intentId } = await readyForDraft();
+      gateway.boundraAgent = false;
+      try {
+        expect((await http().get('/api/v1/config/public')).body).toMatchObject({
+          configured: true,
+          operator: null,
+        });
+        const missing = await as(s).post(`/intents/${intentId}/mandate-drafts`);
+        expect(missing.status).toBe(400);
+        expect(missing.body.error.message).toMatch(/runs no Boundra agent/);
+        const agent = randomAddress();
+        const own = await as(s).post(`/intents/${intentId}/mandate-drafts`, { operator: agent });
+        expect(own.status).toBe(201);
+        expect(own.body.preview.operatorSource).toBe('OWNER');
+      } finally {
+        gateway.boundraAgent = true;
+      }
+    });
+
     it('persona A: one question, LiquidVault draft, stale and superseded approvals rejected', async () => {
       const s = await login();
       const created = await as(s).post('/intents', intentBody);

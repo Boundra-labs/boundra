@@ -16,7 +16,8 @@ export const CHAIN_GATEWAY = Symbol('CHAIN_GATEWAY');
 
 export interface ChainDeployment {
   manifest: DeploymentManifest;
-  operator: string;
+  /** Boundra's own agent (OPERATOR_ADDRESS); null when this deployment runs none. */
+  operator: string | null;
 }
 
 /** Read-only chain access for the API. Every value comes from a confirmed block. */
@@ -55,9 +56,7 @@ export class RpcChainGateway implements ChainGateway {
   }
 
   deployment(): ChainDeployment | null {
-    return this.reader && this.operator
-      ? { manifest: this.reader.manifest, operator: this.operator }
-      : null;
+    return this.reader ? { manifest: this.reader.manifest, operator: this.operator } : null;
   }
 
   private require(): BoundraChainReader {

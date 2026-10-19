@@ -46,6 +46,7 @@ test('a clarified goal becomes a draft with every field to review, approved only
   await expect(page.getByRole('heading', { name: 'Review your mandate' })).toBeVisible();
   const short = (address: string) => `${address.slice(0, 6)}…${address.slice(-4)}`.toLowerCase();
   await expect(row(page, 'Owner')).toContainText(`${short(owner.address)} · you`);
+  await expect(row(page, 'Agent (operator)')).toContainText('Boundra’s agent');
   await expect(row(page, 'Executor')).toContainText(short(owner.executor!));
   await expect(row(page, 'Withdrawals go to')).toContainText('you');
   await expect(row(page, 'Network')).toContainText('chain 84532');
@@ -64,6 +65,22 @@ test('a clarified goal becomes a draft with every field to review, approved only
   await approve.click();
   await expect(page.getByRole('heading', { name: 'Authorize in your wallet' })).toBeVisible();
   await expect(page.getByText('Approved · not yet authorized')).toBeVisible();
+});
+
+test('a mandate for the owner’s own agent says so before anything is approved', async ({
+  page,
+}) => {
+  const { owner } = await readyOwnerAt(page, '/app');
+  const agent = '0x9999999999999999999999999999999999999999';
+  const mandates = await mockMandates(page, {
+    owner: owner.address,
+    executor: owner.executor!,
+    agent,
+  });
+  await page.goto(`/app/mandates/${mandates.seed()}`);
+  await expect(row(page, 'Agent (operator)')).toContainText('0x9999…9999 · your own agent');
+  await expect(row(page, 'Agent (operator)')).toContainText('Boundra does not run it');
+  await expect(page.getByText(/You chose the agent for this mandate yourself/)).toBeVisible();
 });
 
 test('limits are checked before a new revision is drafted, and the old one is replaced', async ({
