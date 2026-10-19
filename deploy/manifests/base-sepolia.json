@@ -1,0 +1,17 @@
+{
+  "chainId": 84532,
+  "factory": "0xFbD91368BfFA9AF5C7034bCB7F53Cc1eC906b7f4",
+  "mockUsdc": "0x13e7a4d02941a029Cf841f16E38eF377cb21e1Cf",
+  "faucet": "0xEbdc09B132066fF067E30FE077A58E818801FA2f",
+  "liquidVault": "0x7C0fC1a0551d5099d093E8D8b34a214758f7B27a",
+  "timedVault": "0x7ffD08b7b52E26023142060D3f5dBDe27757CD84",
+  "riskAdmin": "0xA05F8266B63D8074AcBA1c8f4e7355E7F515F14b",
+  "deploymentBlock": "48322785",
+  "codeHashes": {
+    "factory": "0x7d63da1fb3b582099a94f832332053bab602e513872605e85b660e6dadbe450c",
+    "mockUsdc": "0x6a0ce1845dc336fb3d8d22f469b24e307b50cb23c34372028107f0739720af78",
+    "faucet": "0x1951b900827beb6d7ab493aefe4252e281756c51af1d2d2070ccca154c51b626",
+    "liquidVault": "0x83d52e169a7160f1e24b85510650446aadcdf8fdf3836ade604252f8c95d908f",
+    "timedVault": "0xd86fae7f7caa73f6330df9e4242173de17be0d28c728464597c4607ba111cb48"
+  }
+}
