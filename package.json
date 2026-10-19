@@ -10,7 +10,7 @@
   "scripts": {
     "env:setup": "node scripts/setup.mjs",
     "dev": "pnpm build:packages && pnpm --parallel --filter @boundra/web --filter @boundra/api --filter @boundra/worker dev",
-    "build:packages": "pnpm --filter @boundra/shared --filter @boundra/database --filter @boundra/chain --filter @boundra/acce --filter @boundra/llm build",
+    "build:packages": "pnpm --filter @boundra/shared --filter @boundra/database --filter @boundra/chain --filter @boundra/acce --filter @boundra/llm --filter @boundra/sdk build",
     "build": "pnpm build:packages && pnpm --filter @boundra/web --filter @boundra/api --filter @boundra/worker build",
     "typecheck": "pnpm build:packages && pnpm -r --if-present typecheck",
     "lint": "eslint . --max-warnings 0",
@@ -20,7 +20,7 @@
     "test:integration": "pnpm -r --if-present test:integration",
     "test:e2e": "playwright test",
     "test:e2e:real": "playwright test -c playwright.real-api.config.ts",
-    "test:e2e:chain": "pnpm --filter @boundra/worker test:e2e:chain",
+    "test:e2e:chain": "pnpm --workspace-concurrency=1 --filter @boundra/worker --filter @boundra/sdk test:e2e:chain",
     "benchmark": "pnpm build:packages && pnpm --filter @boundra/evaluation build && pnpm --filter @boundra/evaluation benchmark",
     "contracts:build": "pnpm --filter @boundra/contracts build",
     "contracts:test": "pnpm --filter @boundra/contracts test",
