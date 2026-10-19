@@ -162,11 +162,22 @@ async function call<T>(
   const headers: Record<string, string> = { accept: 'application/json' };
   if (init.body !== undefined) headers['content-type'] = 'application/json';
   if (init.token) headers.authorization = `Bearer ${init.token}`;
-  const response = await fetcher(`${base}${path}`, {
-    method: init.method ?? 'GET',
-    headers,
-    body: init.body === undefined ? undefined : JSON.stringify(init.body),
-  });
+  let response: Response;
+  try {
+    response = await fetcher(`${base}${path}`, {
+      method: init.method ?? 'GET',
+      headers,
+      body: init.body === undefined ? undefined : JSON.stringify(init.body),
+      signal: AbortSignal.timeout(30_000),
+    });
+  } catch {
+    throw new BoundraApiError(
+      0,
+      'DEPENDENCY_UNAVAILABLE',
+      `Cannot reach the Boundra API at ${base}`,
+      'Check the app URL and that Boundra is running, then try again.',
+    );
+  }
   if (response.status === 204) return undefined as T;
   const body = (await response.json().catch(() => null)) as {
     error?: { code: string; message: string; recovery?: string };

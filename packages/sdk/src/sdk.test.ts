@@ -112,6 +112,17 @@ describe('BoundraClient', () => {
     expect(error).toMatchObject({ status: 409, code: 'STALE_PREVIEW', recovery: 'Reload.' });
   });
 
+  it('reports an unreachable API as a dependency error', async () => {
+    const down = (async () => {
+      throw new TypeError('fetch failed');
+    }) as unknown as typeof fetch;
+    const client = new BoundraClient({ apiUrl: 'http://x', token: 't', fetch: down });
+    await expect(client.dashboard()).rejects.toMatchObject({
+      code: 'DEPENDENCY_UNAVAILABLE',
+      message: 'Cannot reach the Boundra API at http://x/api/v1',
+    });
+  });
+
   it('accepts the app origin or its API URL, and nothing but http(s)', () => {
     expect(apiBase('https://a.example')).toBe('https://a.example/api/v1');
     expect(apiBase('https://a.example/api/v1/')).toBe('https://a.example/api/v1');
