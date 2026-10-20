@@ -1,0 +1,137 @@
+% Boundra execution evidence report. Compile with Tectonic: tectonic -X compile execution-evidence.tex
+\documentclass[11pt,a4paper,oneside]{report}
+\input{boundra-style}
+
+\renewcommand{\docname}{Execution evidence}
+\hypersetup{pdftitle={Boundra: Execution Evidence}}
+\renewcommand{\thesection}{\arabic{section}}
+\renewcommand{\sectionmark}[1]{\markboth{#1}{}}
+% \tx{full hash}{short label}: a Basescan link to one transaction.
+\newcommand{\tx}[2]{\href{https://sepolia.basescan.org/tx/#1}{\texttt{\color{bGreen}#2}}}
+\newcommand{\addr}[2]{\href{https://sepolia.basescan.org/address/#1}{\texttt{\color{bGreen}#2}}}
+\newcommand{\fullhash}[1]{\href{https://sepolia.basescan.org/tx/#1}{\texttt{\fontsize{6}{7.5}\selectfont\color{bGreen}#1}}}
+
+\begin{document}
+
+\begin{titlepage}
+\thispagestyle{empty}
+\begin{tikzpicture}[remember picture,overlay]
+  \fill[bForest] (current page.south west) rectangle (current page.north east);
+  \draw[bGreen,line width=26pt,opacity=0.35]
+    ($(current page.south east)+(-2.2,6.5)$) arc[start angle=-10,end angle=120,radius=9.5];
+  \draw[bLime,line width=3pt,opacity=0.55]
+    ($(current page.south east)+(-1.2,4.6)$) arc[start angle=-20,end angle=95,radius=7.2];
+  \node[anchor=north west,inner sep=0] at ($(current page.north west)+(2.3,-2.6)$)
+    {\brandmarkcol[1.5]{bIvory}};
+  \node[anchor=north west,inner sep=0,text width=14.5cm,align=left]
+    at ($(current page.north west)+(2.3,-6.4)$) {%
+    {\color{bLime}\small\bfseries\MakeUppercase{Submission item 06}}\\[10pt]
+    {\headfont\fontsize{40}{46}\selectfont\color{bIvory}\spaceskip=0.26em Execution evidence}\\[12pt]
+    {\headfont\LARGE\color{bIvory}Real transactions on Base Sepolia}\\[18pt]
+    {\large\color{bMutedDark}One owner journey on the deployed app: 16 transactions, each read\\[2pt]
+      back from the chain, including the agent acting on its own.}};
+  \node[anchor=south west,inner sep=0,text width=15cm,align=left]
+    at ($(current page.south west)+(2.3,2.4)$) {%
+    {\small\color{bMutedDark}%
+    \begin{tabular}{@{}l@{\hspace{1.2em}}l@{}}
+      \color{bLime}\bfseries Event   & FinTechathon 2026, Topic F (on-chain)\\
+      \color{bLime}\bfseries Network & Base Sepolia testnet (chain 84532)\\
+      \color{bLime}\bfseries App     & \texttt{https://boundra-api.onrender.com}\\
+      \color{bLime}\bfseries Blocks  & 48,368,221 to 48,368,421, 20 October 2026\\
+    \end{tabular}}};
+\end{tikzpicture}
+\end{titlepage}
+
+\section{Summary}
+
+An owner used the deployed Boundra app to give Boundra's agent a mandate: put 300 MockUSDC into LiquidVault, with withdrawals allowed at any time. The owner signed every authority and funding transaction in their own wallet; the agent then made the deposit by itself, with its own key; the owner paused, resumed, took the funds back and revoked the mandate. All 16 transactions succeeded on chain.
+
+\begin{stable}{@{}P{3.6cm}L@{}}
+\headrow \thead{Who} & \thead{Address}\\ \midrule
+Owner & \addr{0xEcc070725898eb3aaea8448b16272eE6E56c5e81}{0xEcc070725898eb3aaea8448b16272eE6E56c5e81}\\
+Owner's executor & \addr{0x0e4c01b7fAc2e45a2a38eA7B9A0744D4eF0e9E2E}{0x0e4c01b7fAc2e45a2a38eA7B9A0744D4eF0e9E2E}\\
+Boundra's agent (operator) & \addr{0x7d8616836B3fC6FFABE090a4d3658e5a5C3A87F1}{0x7d8616836B3fC6FFABE090a4d3658e5a5C3A87F1}\\
+Factory & \addr{0xFbD91368BfFA9AF5C7034bCB7F53Cc1eC906b7f4}{0xFbD91368BfFA9AF5C7034bCB7F53Cc1eC906b7f4}\\
+LiquidVault & \addr{0x7C0fC1a0551d5099d093E8D8b34a214758f7B27a}{0x7C0fC1a0551d5099d093E8D8b34a214758f7B27a}\\
+MockUSDC & \addr{0x13e7a4d02941a029Cf841f16E38eF377cb21e1Cf}{0x13e7a4d02941a029Cf841f16E38eF377cb21e1Cf}\\
+\end{stable}
+
+\begin{principle}{What the evidence shows}
+The agent acted alone, with its own key, and only within the limits the owner signed; the owner kept every key and every control; funds only ever returned to the owner.
+\end{principle}
+
+\section{The journey}
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[node distance=0.32cm]
+  \node[boxlime,text width=2.05cm,minimum height=2.3cm] (p1) {\textbf{Set up}\\[2pt]\scriptsize faucet claim\\create executor\\[2pt]\muted{\tiny 48368221--230}};
+  \node[boxlime,text width=2.05cm,minimum height=2.3cm,right=of p1] (p2) {\textbf{Authorize}\\[2pt]\scriptsize setMandate\\approve, fund\\[2pt]\muted{\tiny 48368265--292}};
+  \node[boxdark,text width=2.05cm,minimum height=2.3cm,right=of p2] (p3) {\textbf{Agent acts}\\[2pt]\scriptsize executeDeposit\\300 MockUSDC\\[2pt]{\tiny 48368303}};
+  \node[boxlime,text width=2.05cm,minimum height=2.3cm,right=of p3] (p4) {\textbf{Fund again}\\[2pt]\scriptsize approve, fund\\[2pt]\muted{\tiny 48368321--328}};
+  \node[boxsage,text width=2.05cm,minimum height=2.3cm,right=of p4] (p5) {\textbf{Control}\\[2pt]\scriptsize pause, resume\\[2pt]\muted{\tiny 48368357--389}};
+  \node[boxsage,text width=2.05cm,minimum height=2.3cm,right=of p5] (p6) {\textbf{Recover, end}\\[2pt]\scriptsize recoverIdle\\ownerWithdraw\\revoke\\[2pt]\muted{\tiny 48368396--421}};
+  \foreach \a/\b in {1/2,2/3,3/4,4/5,5/6}{\draw[arr] (p\a) -- (p\b);}
+  \node[lblc,below=4pt of p3,text width=3.4cm] {signed by the agent; no owner prompt};
+\end{tikzpicture}
+\caption{Owner transactions in light boxes, the agent's in the dark box. Block numbers below each phase.}
+\end{figure}
+
+\begin{keypoint}[The agent's own transaction]
+Eleven blocks after the executor was funded, the worker proposed a deposit, checked it against the confirmed mandate, simulated it, signed it with the agent's key and sent it:
+\tx{0xb9e053eb35b4780703d9d6e6e79f045d3401fb219afea3c6789471574740100b}{0xb9e053eb…0100b}, block 48,368,303, from the agent to the owner's executor, \code{executeDeposit} of 300 MockUSDC into LiquidVault, status success. The single allocation was then complete, so the agent held and sent nothing more.
+\end{keypoint}
+
+\newpage
+\section{All transactions}
+
+\begin{btable}{@{}P{1.7cm}P{1.2cm}P{4.2cm}L@{}}
+\headrow \thead{Block} & \thead{Sender} & \thead{Call} & \thead{Transaction hash (Basescan)}\\ \midrule\endhead
+48368221 & owner & Faucet \code{claim} & \fullhash{0x74f57e9df29dab05d4aab933cf296c8f5d5e32afb02cabda189c536464c04fc0}\\
+48368230 & owner & Factory \code{createExecutor} & \fullhash{0x815efb6f67f5db80d164689e9ef13ce405d91fe9eab271f286b287b682a18808}\\
+48368265 & owner & Executor \code{setMandate} & \fullhash{0xe648e4e4b2e0717c0fa014da53f87024cb78d7d05edb7543fb23579b3041797d}\\
+48368283 & owner & MockUSDC \code{approve} & \fullhash{0x4f3609689d393939bad1eee1766d37abee5a4c0b75c5ac770bea1a7a4f453b0d}\\
+48368292 & owner & Executor \code{fund} & \fullhash{0xf67668a01d46122526af2eafe582511e570ddf833fea7d3764269ff17c599300}\\
+\rowcolor{bLimeSoft} 48368303 & \textbf{agent} & Executor \code{executeDeposit} & \fullhash{0xb9e053eb35b4780703d9d6e6e79f045d3401fb219afea3c6789471574740100b}\\
+48368321 & owner & MockUSDC \code{approve} & \fullhash{0xe1704fcc1ea7919da1b3489af32237b76120c0063b6456343bfa4d2d59af9b05}\\
+48368328 & owner & Executor \code{fund} & \fullhash{0x23e0c927b0fc41cbf3844d806769897c128f85f2265fa1183fd7ba48ee473151}\\
+48368357 & owner & Executor \code{pause} & \fullhash{0xdfd3c2eff130eb00fbf0e8cb09b9b4ba7d95db840691d43d66e7d1e8133babc7}\\
+48368373 & owner & Executor \code{pause} (repeat) & \fullhash{0xc0bd425776bd4bc5783cfd92c555d7e7f50ed3455ddf3de09c561c482458bb91}\\
+48368382 & owner & Executor \code{resume} & \fullhash{0xb7251b4d5495e56506c26366718648689144019a1edb7cbfe8f0f28b6e7d1abe}\\
+48368389 & owner & Executor \code{resume} (repeat) & \fullhash{0x2ab19ea34d287c9f8f242ddb2c79aff38d6010fabcbf05017a80e21b8e8ffdf5}\\
+48368396 & owner & Executor \code{recoverIdle} & \fullhash{0x56efae44fc317b28e958f5e99e56743cbf553dd26f6b0999dd28e5a94117c564}\\
+48368408 & owner & Executor \code{ownerWithdraw} & \fullhash{0xef7e0b9a59098e90d42fec06446533bc332715c9540953de96f4e32a1829d9e9}\\
+48368417 & owner & Executor \code{revoke} & \fullhash{0x7dbd39a2384c624bd5fa784e40fb4b835f5097e423db27e739a111502699960c}\\
+48368421 & owner & Executor \code{revoke} (repeat) & \fullhash{0xce1de1440d4084d9ffee8929a4f8a22f2e482320f02eed6b957bca5d0e958812}\\
+\end{btable}
+
+Every transaction above has status \textbf{success}. Senders and targets were read back from the chain: the owner's wallet signed every owner transaction, and only the agent's address signed the deposit.
+
+\begin{note}[About the repeats]
+Pause, resume and revoke appear twice because the app did not show the new state until the page was reloaded, so the owner sent them again. The first of each pair had already taken effect; both succeed on chain. A fix (the overview polls until the confirmed block and disables the controls meanwhile) is in pull request \#11.
+\end{note}
+
+\section{What it proves}
+
+\begin{stable}{@{}P{4.4cm}L@{}}
+\headrow \thead{Claim} & \thead{Evidence above}\\ \midrule
+The owner keeps every key & Every owner transaction is signed by the owner's address; the server never signed for them.\\
+The agent acts on its own & The deposit is signed by the agent's address, with no owner transaction in that block.\\
+The agent stays within the mandate & The executor accepted \code{executeDeposit} only after \code{setMandate} and \code{fund}; it sent nothing after the single allocation.\\
+The owner stays in control & \code{pause} and \code{resume} stopped and restarted the agent; \code{revoke} ended the mandate for good.\\
+Funds return only to the owner & \code{recoverIdle} and \code{ownerWithdraw} paid the owner's wallet.\\
+\end{stable}
+
+\section{How to verify}
+
+Each hash links to \href{https://sepolia.basescan.org}{sepolia.basescan.org}. With Foundry:
+
+\begin{lstlisting}
+cast receipt <hash> status --rpc-url https://sepolia.base.org   # 1 (success)
+cast tx <hash> from      --rpc-url https://sepolia.base.org   # the sender above
+cast tx <hash> to        --rpc-url https://sepolia.base.org   # executor, factory, faucet or MockUSDC
+\end{lstlisting}
+
+The contract addresses come from the reviewed manifest \code{deploy/manifests/base-sepolia.json}; their deployed bytecode was compared with the repository's compiled contracts before they were pinned. Their source is also published and verified on independent explorers: MockUSDC, the faucet and LiquidVault on \href{https://base-sepolia.blockscout.com}{Blockscout}; TimedVault, the factory and this journey's executor on \href{https://sourcify.dev}{Sourcify} (exact match). So the calls in the table above can be read against the exact code that ran.
+
+\end{document}

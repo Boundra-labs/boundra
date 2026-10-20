@@ -1,5 +1,5 @@
 /**
- * Local-chain end-to-end run (PRD §11.2) on anvil with chain ID 84532: Person 1's deploy script,
+ * Local-chain end-to-end run (PRD §11.2) on anvil with chain ID 84532: the deploy script,
  * the real API over HTTP, the real worker through its activation gate, a fresh PostgreSQL
  * database, and owner/risk-admin transactions signed by their own wallets. Time travel is never
  * used, and nothing here is presented as public Base Sepolia evidence.
@@ -111,7 +111,7 @@ before(async () => {
     }
   }
   const deploymentBlock = await publicClient.getBlockNumber();
-  // Person 1's deployment script; broadcast/cache artefacts go to a temp dir, never contracts/.
+  // the deployment script; broadcast/cache artefacts go to a temp dir, never contracts/.
   const forge = spawnSync(
     process.execPath,
     [

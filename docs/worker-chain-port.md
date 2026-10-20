@@ -1,10 +1,10 @@
-# Worker chain ports — Person 1 / Person 2
+# Worker chain ports
 
 ## Implemented modules
 
 `apps/worker/src/chain/execution.ts` implements `OperatorExecutionService` with confirmed snapshot checks, latest-state simulation, gas/fee caps, offline restricted-operator signing, persistence-before-broadcast, canonical receipt/event verification, and identical-transaction crash recovery.
 
-Person 2's PostgreSQL implementations live in `apps/worker/src/persistence/` (`PostgresExecutionStore`, `PostgresMonitorStore`) and are wired by `apps/worker/src/runtime/worker.runtime.ts`. The worker starts in one of three modes chosen by `runtime/activation.ts`:
+the PostgreSQL implementations live in `apps/worker/src/persistence/` (`PostgresExecutionStore`, `PostgresMonitorStore`) and are wired by `apps/worker/src/runtime/worker.runtime.ts`. The worker starts in one of three modes chosen by `runtime/activation.ts`:
 
 | Mode           | When                                                                                                                                  | Behaviour                                                                     |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
@@ -24,7 +24,7 @@ The heartbeat records the mode and API readiness reports `executionEnabled` only
 - `reserveBroadcast(actionId, maxAttempts, minIntervalMs, lease)` atomically checks/increments persisted send count and timestamp. Maximum 3 sends, minimum 10 seconds apart, retained across restarts. Count the intent before network I/O so crashes cannot reset the budget.
 - `recordState` persists transitions and canonical receipt references using compare-and-set/fencing. Never discard an ambiguous signed attempt or allocate a new action/EOA nonce merely to get past an RPC timeout.
 
-Person 2 must integration-test these constraints against real PostgreSQL, including concurrent workers, lease replacement, a crash between reservation/signing/save, and a crash after save/broadcast. The Person 1 unit tests mock the store and do not claim to prove that database implementation.
+These constraints are integration-tested against real PostgreSQL, including concurrent workers, lease replacement, a crash between reservation/signing/save, and a crash after save/broadcast. The chain unit tests mock the store; the PostgreSQL implementation is covered by the integration tests.
 
 ## Recovery behavior
 
@@ -50,4 +50,4 @@ Implement `MonitorStore` with a renewable fenced lease, persistent `(nextBlock, 
 
 Cursor hash mismatch or chain regression triggers `rewind` to the trusted deployment block. Without stored ancestor history, full rescan is the conservative fallback for a deeper-than-overlap reorg. `rewind` must mark affected observations orphaned and invalidate pending derived decisions atomically. It must not erase receipt history or pretend executed transactions were undone; affected actions go through reconciliation.
 
-Normal scans overlap at least 20 blocks, bounded in configurable batches. Never dispatch directly from event text: reconcile current vault/position/mandate through `BoundraChainReader`, enforce freshness and policy, then use the execution service. RPC errors or invalid/removed/unknown-source logs do not advance the cursor. Person 2 owns store migrations and real PostgreSQL/restart/concurrency integration tests.
+Normal scans overlap at least 20 blocks, bounded in configurable batches. Never dispatch directly from event text: reconcile current vault/position/mandate through `BoundraChainReader`, enforce freshness and policy, then use the execution service. RPC errors or invalid/removed/unknown-source logs do not advance the cursor.

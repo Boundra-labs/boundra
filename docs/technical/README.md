@@ -1,8 +1,8 @@
 # Technical document
 
-`boundra-technical.pdf` is the compiled technical document: architecture, contracts, ACCE, mandates, the worker, data, API, web app, language model, SDK and MCP, security, testing and deployment.
+`boundra-technical.pdf` (technical document), `security-assessment.pdf` (security self-assessment report) and `execution-evidence.pdf` (Base Sepolia execution evidence) are the compiled submission documents. The technical document covers: architecture, contracts, ACCE, mandates, the worker, data, API, web app, language model, SDK and MCP, security, testing and deployment.
 
-The source is `boundra-technical.tex` (styles, brand colours, diagram styles) plus one file per chapter in `sections/`. It uses the brand palette from `apps/web/src/app/globals.css` and draws the mark from `apps/web/src/components/brand-mark.tsx`.
+The source is `boundra-technical.tex` plus one file per chapter in `sections/`; the two reports are `security-assessment.tex` and `execution-evidence.tex`. All three share `boundra-style.tex` (fonts, brand colours, callouts, tables, diagram styles). It uses the brand palette from `apps/web/src/app/globals.css` and draws the mark from `apps/web/src/components/brand-mark.tsx`.
 
 ## Build
 

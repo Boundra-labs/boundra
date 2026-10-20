@@ -1,4 +1,4 @@
-# Testnet deployment — Person 1
+# Testnet deployment
 
 ## Prerequisites
 

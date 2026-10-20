@@ -3,7 +3,7 @@ import { E2E_RPC_URL, GAS_FUNDERS } from './tests/e2e/support/chain';
 
 export default defineConfig({
   testDir: './tests/e2e',
-  // Deploys Person 1's contracts on a local anvil chain for the transaction tests.
+  // Deploys the contracts on a local anvil chain for the transaction tests.
   globalSetup: './tests/e2e/global-setup.ts',
   forbidOnly: Boolean(process.env.CI),
   // One gas-funding dev account per worker (see workerFunder), so never more workers than those.

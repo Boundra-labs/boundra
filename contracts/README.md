@@ -1,4 +1,4 @@
-# Contracts — Person 1
+# Contracts
 
 Foundry and OpenZeppelin are pinned as workspace dependencies; no global Forge installation is required.
 

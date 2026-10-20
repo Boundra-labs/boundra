@@ -1,4 +1,4 @@
-# Typed chain integration — Person 1 handoff
+# Typed chain integration
 
 ## Exports
 
@@ -20,8 +20,8 @@ Provide chainId 84532, factory/mockUsdc/faucet/liquidVault/timedVault/riskAdmin 
 
 Snapshots use bigint internally; API/evidence serialization must convert integer fields to strings. Chain action nonce is distinct from the EOA transaction nonce.
 
-## Person 2 database/execution port
+## Database and execution port
 
-Person 1 owns the sender/monitor implementation; Person 2 owns durable storage, locks, scheduling and authenticated workflow. Persistence must provide atomic per-action/per-signer ownership, transaction-attempt save before network broadcast, lookups of ambiguous attempts, canonical event deduplication and block cursors. A retry must retain actionId and reconcile existing attempts before signing a new transaction. Until a durable implementation is supplied, sender startup must remain disabled.
+The chain modules implement the sender and monitor; the worker supplies durable storage, locks, scheduling and the authenticated workflow. Persistence must provide atomic per-action/per-signer ownership, transaction-attempt save before network broadcast, lookups of ambiguous attempts, canonical event deduplication and block cursors. A retry must retain actionId and reconcile existing attempts before signing a new transaction. Until a durable implementation is supplied, sender startup must remain disabled.
 
-Worker lifecycle/wiring belongs to Person 2. The application remains observe-only until this port, trusted deployment configuration and confirmed owner funding/authorization are integrated. No owner key belongs in backend configuration.
+The worker runtime wires the lifecycle. The application remains observe-only until this port, trusted deployment configuration and confirmed owner funding/authorization are integrated. No owner key belongs in backend configuration.

@@ -7,7 +7,7 @@ import { mockAccountApi, mockPublicConfig, mockSignedIn } from './support/mock-a
 import { installTestWallet, type TestWalletOptions } from './support/wallet';
 
 /**
- * Account setup sends real transactions to Person 1's contracts on the E2E chain; only the API is
+ * Account setup sends real transactions to the contracts on the E2E chain; only the API is
  * stood in for.
  */
 async function openApp(page: Page, privateKey: Hex, wallet: TestWalletOptions = {}) {

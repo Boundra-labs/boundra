@@ -1,4 +1,4 @@
-# Data model — Person 2
+# Data model
 
 PostgreSQL 17 via Prisma 7 (`packages/database/prisma/schema.prisma`); migrations are applied as a release step with `pnpm db:migrate`, never reset at startup. Addresses are stored lowercase, hashes as lowercase `0x` hex, token amounts and block numbers as `NUMERIC(78,0)` (exact uint256) and EOA nonces as `BIGINT`. PostgreSQL is not the source of truth for authority, receipts or positions: chain state is reconciled before every action.
 

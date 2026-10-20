@@ -1,0 +1,182 @@
+% Boundra security self-assessment report. Compile with Tectonic: tectonic -X compile security-assessment.tex
+\documentclass[11pt,a4paper,oneside]{report}
+\input{boundra-style}
+
+\renewcommand{\docname}{Security self-assessment}
+\hypersetup{pdftitle={Boundra: Security Self-Assessment Report}}
+% A short report: sections are the top level, numbered 1, 2, 3.
+\renewcommand{\thesection}{\arabic{section}}
+\renewcommand{\sectionmark}[1]{\markboth{#1}{}}
+\titlecontents{section}[2.2em]{\addvspace{0.42em}\headfont}
+  {\contentslabel[\color{bGreen}\thecontentslabel]{2.2em}}{}{\hfill\contentspage}
+\titlecontents{subsection}[4.8em]{\small}
+  {\contentslabel[\color{bMuted}\thecontentslabel]{2.6em}}{}
+  {\titlerule*[0.6pc]{\color{bLine}.}\contentspage}
+\setcounter{tocdepth}{2}
+\newcommand{\yes}{{\color{bGreen}\textbf{yes}}}
+\newcommand{\no}{{\color{bMuted}no}}
+\newcommand{\impact}[1]{\textbf{#1}}
+
+\begin{document}
+
+\begin{titlepage}
+\thispagestyle{empty}
+\begin{tikzpicture}[remember picture,overlay]
+  \fill[bForest] (current page.south west) rectangle (current page.north east);
+  \draw[bGreen,line width=26pt,opacity=0.35]
+    ($(current page.south east)+(-2.2,6.5)$) arc[start angle=-10,end angle=120,radius=9.5];
+  \draw[bLime,line width=3pt,opacity=0.55]
+    ($(current page.south east)+(-1.2,4.6)$) arc[start angle=-20,end angle=95,radius=7.2];
+  \node[anchor=north west,inner sep=0] at ($(current page.north west)+(2.3,-2.6)$)
+    {\brandmarkcol[1.5]{bIvory}};
+  \node[anchor=north west,inner sep=0,text width=14.5cm,align=left]
+    at ($(current page.north west)+(2.3,-6.4)$) {%
+    {\color{bLime}\small\bfseries\MakeUppercase{Submission item 05}}\\[10pt]
+    {\headfont\fontsize{36}{42}\selectfont\color{bIvory}\spaceskip=0.26em Security self-assessment\\report}\\[12pt]
+    {\headfont\LARGE\color{bIvory}Permission tiers and known risks}\\[18pt]
+    {\large\color{bMutedDark}Who can do what in Boundra, where each limit is enforced,\\[2pt]
+      and the risks that remain, with their mitigations.}};
+  \node[anchor=south west,inner sep=0,text width=15cm,align=left]
+    at ($(current page.south west)+(2.3,2.4)$) {%
+    {\small\color{bMutedDark}%
+    \begin{tabular}{@{}l@{\hspace{1.2em}}l@{}}
+      \color{bLime}\bfseries Event   & FinTechathon 2026, Topic F\\
+      \color{bLime}\bfseries Network & Base Sepolia testnet (chain 84532), MockUSDC and mock vaults\\
+      \color{bLime}\bfseries Status  & Self-assessment, not an independent audit\\
+      \color{bLime}\bfseries Date    & 20 October 2026\\
+    \end{tabular}}};
+\end{tikzpicture}
+\end{titlepage}
+
+\section{Summary}
+
+Boundra gives an AI agent a wallet it cannot misuse. Authority is split into tiers: only the \emph{owner} can grant, change or end authority and take funds back; the \emph{agent} can only make two typed calls, inside limits the owner signed; everyone else (risk admin, backend, apps holding an API token, the language model) has narrower powers still. The decisive limits are enforced by the owner's executor contract on chain, not by the backend's good behaviour.
+
+\begin{principle}{The guarantee}
+Even if the agent's key is stolen, the server is compromised or the model is wrong, the worst outcome is bounded by the mandate the owner signed: capped amounts, one allocation, allowed vaults only, withdrawals paid to the owner, and the owner can pause or revoke at any time.
+\end{principle}
+
+\begin{caution}[Scope]
+This is the team's self-assessment of a testnet prototype (Base Sepolia, MockUSDC, two controlled mock vaults). It is not an independent audit and not an approval for real funds.
+\end{caution}
+
+\section{Permission tiers}
+
+\subsection{The tiers}
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \foreach \y/\sty/\name/\can [count=\i] in {
+    0/boxlime/Owner/{grants, changes and ends authority; funds; takes funds back},
+    -1.35/boxdark/Agent (operator)/{two typed calls, only inside the confirmed mandate},
+    -2.7/boxamber/Risk admin/{sets mock-vault risk state and capacity; cannot move positions},
+    -4.05/boxsage/{Backend (API, worker)}/{reads, prepares, records; the worker holds only the agent key},
+    -5.4/boxsage/{API token (apps, AI)}/{reads the account, drafts mandates; never approves or signs},
+    -6.75/boxghost/Language model/{rewords text; validated, with a template fallback}}{
+    \node[\sty,text width=3.3cm,minimum height=1.0cm,anchor=west] (t\i) at (0,\y) {\textbf{\name}};
+    \node[anchor=west,text width=7.2cm,font=\small,align=left] at (4.0,\y) {\can};
+  }
+  \node[boxgreen,text width=2.2cm,minimum height=3.4cm,anchor=west] (exec) at (11.6,-0.68)
+    {\textbf{Executor contract}\\[3pt]\scriptsize checks every call on chain};
+  \draw[arr] (11.25,0) -- (exec.west |- 0,0);
+  \draw[arr] (11.25,-1.35) -- (exec.west |- 0,-1.35);
+  \draw[biarr,draw=bLime!70!bForest,line width=1pt] (-0.45,0.4) -- node[lblc,rotate=90,above=1pt]{more authority} (-0.45,-7.1);
+\end{tikzpicture}
+\caption{From most to least authority. Only the owner and the agent can change anything on chain, and the executor checks both.}
+\end{figure}
+
+\newpage
+\subsection{Permission matrix}
+
+\begin{btable}{@{}P{5.2cm}>{\centering\arraybackslash}p{1.25cm}>{\centering\arraybackslash}p{1.25cm}>{\centering\arraybackslash}p{1.25cm}>{\centering\arraybackslash}p{1.35cm}>{\centering\arraybackslash}p{1.25cm}>{\centering\arraybackslash}X@{}}
+\headrow \thead{Action} & \thead{Owner} & \thead{Agent} & \thead{Risk admin} & \thead{Backend} & \thead{API token} & \thead{Model}\\ \midrule\endhead
+Create executor, set mandate, fund & \yes & \no & \no & \no & \no & \no\\
+Pause, resume, revoke & \yes & \no & \no & \no & \no & \no\\
+Recover idle funds, withdraw a position to the owner & \yes & \no & \no & \no & \no & \no\\
+\code{executeDeposit} / \code{executeWithdraw} within the mandate & \no & \yes & \no & \no & \no & \no\\
+Send funds anywhere but the owner & \no & \no & \no & \no & \no & \no\\
+Set a vault's risk state and capacity & \no & \no & \yes & \no & \no & \no\\
+Approve a mandate draft (preview hash) & \yes & \no & \no & \no & \no & \no\\
+Start a goal, answer questions, draft a mandate & \yes & \no & \no & \no & \yes & \no\\
+Read the dashboard and activity & \yes & \no & \no & \no & \yes & \no\\
+Mark a mandate \code{AUTHORIZED} (after chain checks) & \no & \no & \no & \yes & \no & \no\\
+Choose questions, vault or limits & \no & \no & \no & \yes\textsuperscript{*} & \no & \no\\
+Reword a question or summary & \no & \no & \no & \no & \no & \yes\\
+\end{btable}
+{\small\muted{\textsuperscript{*} Deterministic code (ACCE and the mandate builder); the owner reviews and approves the result.}\par}
+
+\subsection{How each tier is implemented}
+
+\begin{btable}{@{}P{2.6cm}P{6.3cm}L@{}}
+\headrow \thead{Tier} & \thead{Enforced by} & \thead{Where}\\ \midrule\endhead
+Owner & \code{onlyOwner} on every authority and recovery function; the owner is immutable per executor; withdrawals always pay the owner & \code{contracts/src/BoundraExecutor.sol}\\
+Agent & Operator address, current version and nonce, fresh action ID, exclusive deadline, allowed vault and action, per-action and total caps, one allocation, lockup and expiry, no deposit into a degraded vault & \code{BoundraExecutor.sol} (\code{\_authorize}); checked again off chain by \code{prepareAction} and simulation\\
+Risk admin & Vault owner only; changes risk flag and global capacity, never a position & \code{contracts/src/MockVault.sol}\\
+Backend & No owner keys; worker modes (\code{observe\_only}, \code{monitor\_only}, \code{execute}); refuses an operator equal to the risk admin; reviewed manifest with pinned bytecode hashes & \code{apps/worker/src/runtime/activation.ts}, \code{packages/chain}\\
+Browser session & SIWE bound to origin and chain, single-use nonce, \code{\_\_Host-} cookie (HttpOnly, Secure, SameSite=Strict), exact \code{Origin} and CSRF token on every change; owner always from the session & \code{apps/api/src/auth}\\
+API token & Signed token statement decides the session kind; bearer only, never a cookie; admin routes refused; hashed, expiring, revocable from the app & \code{apps/api/src/auth}, \code{/app/connect}\\
+Admin & Wallets in \code{ADMIN\_ADDRESSES}, browser session only & \code{apps/api/src/auth}\\
+Language model & Output schema, same alternatives, no new numbers, vaults, addresses, links or guarantees; time and token budgets; template fallback & \code{packages/llm}\\
+\end{btable}
+
+\begin{keypoint}[Defence in depth]
+Every agent action passes four gates: the deterministic policy, the off-chain chain guard (\code{prepareAction}), a simulation against current state, and the executor's own on-chain checks. Only the last one is trusted; the others fail early and explain.
+\end{keypoint}
+
+\section{Known-risk list}
+
+Impact is rated for this testnet prototype; ``real funds'' marks risks that would be blocking before any mainnet use.
+
+\begin{btable}{@{}>{\raggedright\arraybackslash}p{0.75cm}P{3.3cm}P{1.35cm}L P{3.4cm}@{}}
+\headrow \thead{ID} & \thead{Risk} & \thead{Impact} & \thead{Mitigation in place} & \thead{Residual risk}\\ \midrule\endhead
+R1 & Agent key stolen & \impact{High} & Bounded by the mandate: caps, one allocation, allowed vaults, withdrawals only to the owner. Separate account; owner can pause or revoke and recover funds. & Remaining budget can be used at an inconvenient time.\\
+R2 & Server or hosting compromised & \impact{High} & No owner keys on the server; secrets are runtime settings only; agent key bounded as in R1; API tokens cannot move funds. & Misleading drafts are possible; the owner reviews the exact preview before approving.\\
+R3 & Wrong agent decision & \impact{Medium} & Deterministic, tested policy; \code{prepareAction}, simulation and on-chain checks. & Caps limit harm but do not prove suitability.\\
+R4 & Look-alike contracts or fake events & \impact{High} & Reviewed manifest with pinned runtime-bytecode hashes; risk events only from the two pinned vaults. & The manifest review itself is manual.\\
+R5 & RPC provider fails or misreports & \impact{Medium} & Confirmation depth, block-hash checks, receipt re-checks; on failure the worker holds instead of acting. & A single public RPC is trusted; no second source.\\
+R6 & Chain reorganisation & \impact{Low} & 5-block depth, 20-block scan overlap, terminal receipts re-checked for 20 blocks. & A deeper reorg forces a rescan.\\
+R7 & Stuck or duplicated agent transaction & \impact{Medium} & Persist before broadcast, fenced leases, idempotent nonce reservations, identical-byte recovery, release after the deadline. & No automatic fee bumping.\\
+R8 & Risk admin is a central fixture & \impact{Medium} & Can only set risk state and capacity; separate account from operator and deployer. & Not an oracle; stands in for real protocol signals.\\
+R9 & Phishing or cross-site requests & \impact{Medium} & Origin-bound SIWE, \code{\_\_Host-} cookie, exact Origin and CSRF checks; wallet prompts show the real call. & Owners must still check the site address.\\
+R10 & API token leaked & \impact{Medium} & Cannot approve, sign or move funds; hashed, expiring and revocable. & Can read the account and draft mandates until revoked.\\
+R11 & Language model misleads & \impact{Low} & Wording only; validated; template fallback; labelled source. & None for authority.\\
+R12 & Mock vaults and MockUSDC & \impact{Low} & Testnet only; principal 1:1; yields are labelled illustrative. & Real vault integrations need their own review (real funds).\\
+R13 & No independent audit & \impact{High} & Unit, fuzz and stateful invariant tests; end-to-end runs. & Blocking before real funds.\\
+R14 & Free hosting sleeps & \impact{Medium} & Health endpoints; the container restarts if any process stops. & The agent sleeps with the service; a paid plan or VPS removes this.\\
+R15 & Stale screen invited repeated owner actions & \impact{Low} & Repeats were harmless on chain; the fix polls until the confirmed block and disables the controls meanwhile (PR \#11). & None once the fix is deployed.\\
+R16 & Dependency supply chain & \impact{Medium} & Exact version pins, frozen lockfile, CI on every change. & No automated vulnerability scan yet.\\
+R17 & Database lost & \impact{Low} & The chain is the source of truth for authority and funds; scheduled backups in the Compose stack. & Workflow history would be lost (Render's free database expires).\\
+\end{btable}
+
+\section{Evidence and next steps}
+
+\begin{stable}{@{}P{5.0cm}L@{}}
+\headrow \thead{Evidence} & \thead{What it covers}\\ \midrule
+Contract tests (32, Foundry) & Owner-only changes, caps, lockup, replay, arbitrary-call denial, recovery; randomized invariants for budgets and principal.\\
+API and worker integration (24, 29) & Sessions, tokens, owner isolation; leases, crash recovery, concurrency.\\
+Browser suites (53 mocked, 2 real) & Every owner transaction, and the full journey with nothing mocked.\\
+Base Sepolia run & Real owner and agent transactions; see the execution evidence report.\\
+Public source verification & Every deployed contract matches the repository's source, checked by independent explorers (below).\\
+\end{stable}
+
+\subsection{Verified contract source}
+
+Each deployed contract's source was published and verified against its on-chain bytecode, so anyone can read exactly what runs at the addresses in the reviewed manifest. This backs the bytecode comparison done before the manifest was pinned, and the mitigation of R4.
+
+\begin{stable}{@{}P{3.1cm}P{7.2cm}L@{}}
+\headrow \thead{Contract} & \thead{Address} & \thead{Verified on}\\ \midrule
+MockUSDC & \href{https://base-sepolia.blockscout.com/address/0x13e7a4d02941a029Cf841f16E38eF377cb21e1Cf}{\texttt{\footnotesize 0x13e7a4d02941a029Cf841f16E38eF377cb21e1Cf}} & Blockscout\\
+MockUSDCFaucet & \href{https://base-sepolia.blockscout.com/address/0xEbdc09B132066fF067E30FE077A58E818801FA2f}{\texttt{\footnotesize 0xEbdc09B132066fF067E30FE077A58E818801FA2f}} & Blockscout\\
+LiquidVault & \href{https://base-sepolia.blockscout.com/address/0x7C0fC1a0551d5099d093E8D8b34a214758f7B27a}{\texttt{\footnotesize 0x7C0fC1a0551d5099d093E8D8b34a214758f7B27a}} & Blockscout\\
+TimedVault & \href{https://repo.sourcify.dev/84532/0x7ffD08b7b52E26023142060D3f5dBDe27757CD84}{\texttt{\footnotesize 0x7ffD08b7b52E26023142060D3f5dBDe27757CD84}} & Sourcify, exact match\\
+BoundraFactory & \href{https://repo.sourcify.dev/84532/0xFbD91368BfFA9AF5C7034bCB7F53Cc1eC906b7f4}{\texttt{\footnotesize 0xFbD91368BfFA9AF5C7034bCB7F53Cc1eC906b7f4}} & Sourcify, exact match; Blockscout\\
+BoundraExecutor (the evidence run's) & \href{https://repo.sourcify.dev/84532/0x0e4c01b7fAc2e45a2a38eA7B9A0744D4eF0e9E2E}{\texttt{\footnotesize 0x0e4c01b7fAc2e45a2a38eA7B9A0744D4eF0e9E2E}} & Sourcify, exact match\\
+\end{stable}
+{\small\muted{An exact match means the deployed bytecode equals the compiled source including its compiler metadata. Verified with Foundry (\code{forge verify-contract}), Solidity 0.8.30.}\par}
+
+\begin{note}[Before any real funds]
+An independent audit of the contracts, a second RPC source, fee replacement for stuck transactions, real vault integrations with their own review, monitoring and alerts, and a legal review.
+\end{note}
+
+\end{document}

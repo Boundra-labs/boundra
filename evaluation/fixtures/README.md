@@ -1,11 +1,11 @@
 # Persona fixtures
 
-Owner: Person 3. Label review: Person 1 (task-assignment §2, §5). Runner: Person 2 (`../README.md`).
+Runner: see [`../README.md`](../README.md).
 
 | File                        | Purpose                                                                                     |
 | --------------------------- | ------------------------------------------------------------------------------------------- |
 | `boundra-personas-v1.json`  | The benchmark: 50 synthetic personas, 20 development and 30 held-out. **Not frozen yet.**   |
-| `example-prd-personas.json` | Person 2's runner example (PRD §3.2 plus one misleading case). Not a benchmark.             |
+| `example-prd-personas.json` | the runner example (PRD §3.2 plus one misleading case). Not a benchmark.                    |
 | `frozen.json`               | SHA-256 of every frozen fixture. A test fails if a frozen file changes or loses its record. |
 
 `src/persona-fixture.test.ts` checks the benchmark against everything below. It never runs a method, so no label can be fitted to what B0–B3 output.
@@ -39,7 +39,7 @@ Label sets: development 9 LiquidVault only, 5 either vault, 4 LiquidVault or esc
 
 The four `prd-*` personas repeat PRD §3.2, which the whole team has seen, so they are development only. No held-out prompt appears in the development split.
 
-## Review checklist (Person 1)
+## Review checklist
 
 For each persona, read the prompt and hidden preferences and check:
 
@@ -53,8 +53,8 @@ Record disagreements as label changes in a commit of your own, then note the rev
 
 Run the held-out split only after all of these:
 
-1. Person 1 has reviewed the labels, and `provenance` says so.
-2. Person 2 has frozen the ACCE config, the B2 questions and the one-shot prompt (versions appear in every report).
+1. The labels have been reviewed, and `provenance` says so.
+2. The ACCE config, the B2 questions and the one-shot prompt are frozen (versions appear in every report).
 3. Set `"frozen": true`, record `sha256` (`sha256sum boundra-personas-v1.json`) in `frozen.json`, and commit.
 4. Run the held-out split once and publish the report as it comes out.
 

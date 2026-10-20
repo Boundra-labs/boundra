@@ -4,7 +4,7 @@ import { tokenAmountSchema } from '@boundra/shared';
 import { z } from 'zod';
 
 /**
- * Persona fixtures are authored by Person 3 (task-assignment §5). Hidden preferences are the
+ * Persona fixtures are authored by hand. Hidden preferences are the
  * non-negotiable ground truth; only the answer simulator and the evaluator may read them.
  */
 const hiddenSchema = z

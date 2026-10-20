@@ -5,7 +5,7 @@ import { providerCallsRefused } from './stack';
 import { clarify, newOwner, setUpAccount, signInAt, waitOnAgent } from './support';
 
 /**
- * The required journey (task-assignment §5) through the browser, with nothing mocked: sign-in,
+ * The required journey through the browser, with nothing mocked: sign-in,
  * setup, goal, ACCE, review, approval, authorization and funding by the owner's wallet, the real
  * agent's deposit, a risk event set by the risk admin's wallet and the agent's response, and
  * revocation. The model provider is down for the whole run (see global-setup.ts).

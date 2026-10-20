@@ -1,7 +1,5 @@
 # ACCE evaluation (B0–B3)
 
-Runner and baselines: Person 2. Persona fixtures and published reports: Person 3, labels reviewed by Person 1 (task-assignment §2, §5).
-
 ```sh
 pnpm benchmark -- --fixture evaluation/fixtures/<file>.json --split development --out evaluation/reports
 # held-out: only after the fixture is frozen ("frozen": true); add --persist to store EvaluationRun rows
