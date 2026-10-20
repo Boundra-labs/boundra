@@ -46,7 +46,7 @@ Revoked, expired or replaced mandates change status and stop all decisions. Ever
 
 ## Language model use
 
-`packages/llm`: disabled by default (reviewed templates, labelled `TEMPLATE`). With `LLM_PROVIDER=anthropic` and `LLM_API_KEY`, the default model is `claude-opus-5-5` (`LLM_MODEL` to change), structured output, low effort, server-side refusal fallback, a 20 s deadline (`LLM_DEADLINE_MS`), at most 3 attempts and an hourly token budget (`LLM_MAX_TOKENS_PER_HOUR`). The model rewords a planned question (same alternative IDs and order) or restates preview facts. Outputs adding numbers, vaults, protocols, addresses, links or guarantees are rejected; the template is used and the reason is recorded in the activity log.
+`packages/llm`: disabled by default (reviewed templates, labelled `TEMPLATE`). With `LLM_PROVIDER=anthropic` and `LLM_API_KEY`, the default model is `claude-opus-5-5` (`LLM_MODEL` to change), structured output, low effort, server-side refusal fallback. With `LLM_PROVIDER=openai`, `LLM_API_KEY` and `LLM_MODEL` (required, for example `gpt-4.1-mini`): chat completions with strict structured output, low reasoning effort for reasoning models, and refusals or content filtering treated as a refusal. Both providers share a 20 s deadline (`LLM_DEADLINE_MS`), at most 3 attempts and an hourly token budget (`LLM_MAX_TOKENS_PER_HOUR`). The model rewords a planned question (same alternative IDs and order) or restates preview facts. Outputs adding numbers, vaults, protocols, addresses, links or guarantees are rejected; the template is used and the reason is recorded in the activity log.
 
 ## Evaluation
 

@@ -15,6 +15,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "0.131.0",
     "@boundra/acce": "workspace:*",
+    "openai": "7.28.0",
     "zod": "4.6.7"
   },
   "devDependencies": {
