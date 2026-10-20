@@ -1,7 +1,7 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Address } from 'viem';
 import { formatMockUsdc } from '@/lib/amount';
 import { useAuthorizationCheck, useAuthorizationState } from '@/lib/authorization';
@@ -26,7 +26,10 @@ const explainExecutor: RevertExplainer = (name) =>
     ERC20InsufficientBalance: 'Your wallet holds less MockUSDC than this amount.',
   })[name];
 
-function Step({
+/** The three owner transactions, in order. */
+type Step = 'mandate' | 'allowance' | 'funding';
+
+function StepItem({
   index,
   done,
   title,
@@ -92,6 +95,41 @@ export function Authorize({ view }: { view: MandateView }) {
     if (authorized) void queryClient.invalidateQueries({ queryKey: DASHBOARD_KEY });
   }, [authorized, queryClient]);
 
+  // A public RPC endpoint can answer from a node a block or two behind the receipt, so one
+  // re-read after confirmation may still show the old state. Keep re-reading until the confirmed
+  // step shows as done, for at most a minute, and keep its button disabled meanwhile so the
+  // owner does not sign the same transaction again.
+  const [catchingUp, setCatchingUp] = useState<Step | null>(null);
+  const refresh = useRef(chain.refresh);
+  refresh.current = chain.refresh;
+  const caughtUp =
+    catchingUp === 'mandate'
+      ? chain.mandateSet
+      : catchingUp === 'allowance'
+        ? chain.allowed
+        : catchingUp === 'funding'
+          ? chain.funded
+          : true;
+  useEffect(() => {
+    if (catchingUp === null) return;
+    if (caughtUp) {
+      setCatchingUp(null);
+      return;
+    }
+    const timer = setInterval(() => void refresh.current(), 2000);
+    const stop = setTimeout(() => setCatchingUp(null), 60_000);
+    return () => {
+      clearInterval(timer);
+      clearTimeout(stop);
+    };
+  }, [catchingUp, caughtUp]);
+  const updating = (step: Step) =>
+    catchingUp === step && (
+      <p className="field-note" role="status">
+        Updating from the chain; this can take a few seconds.
+      </p>
+    );
+
   const expired = Number(view.tuple.expiresAt) * 1000 <= Date.now();
   if (chain.loading)
     return (
@@ -112,8 +150,10 @@ export function Authorize({ view }: { view: MandateView }) {
     );
 
   const short = chain.walletBalance !== undefined && chain.walletBalance < chain.target;
-  const after = (state: { phase: string }) => {
-    if (state.phase === 'confirmed') void chain.refresh();
+  const after = (step: Step) => (state: { phase: string }) => {
+    if (state.phase !== 'confirmed') return;
+    void chain.refresh();
+    setCatchingUp(step);
   };
 
   return (
@@ -142,7 +182,7 @@ export function Authorize({ view }: { view: MandateView }) {
       )}
 
       <ol className="setup-list">
-        <Step
+        <StepItem
           index={1}
           done={chain.mandateSet || authorized}
           title="Set the mandate"
@@ -151,7 +191,12 @@ export function Authorize({ view }: { view: MandateView }) {
           {approved && !chain.mandateSet && (
             <button
               className="button"
-              disabled={!chain.hashMatches || expired || isBusy(setMandate.state)}
+              disabled={
+                !chain.hashMatches ||
+                expired ||
+                isBusy(setMandate.state) ||
+                catchingUp === 'mandate'
+              }
               onClick={() =>
                 void setMandate
                   .send({
@@ -160,7 +205,7 @@ export function Authorize({ view }: { view: MandateView }) {
                     functionName: 'setMandate',
                     args: [toMandateStruct(view.tuple)],
                   })
-                  .then(after)
+                  .then(after('mandate'))
               }
             >
               Set mandate
@@ -170,9 +215,10 @@ export function Authorize({ view }: { view: MandateView }) {
             state={setMandate.state}
             confirmedText="Mandate set on your executor."
           />
-        </Step>
+          {updating('mandate')}
+        </StepItem>
 
-        <Step
+        <StepItem
           index={2}
           done={chain.allowed}
           title={`Allow exactly ${amount}`}
@@ -181,7 +227,11 @@ export function Authorize({ view }: { view: MandateView }) {
           {!chain.allowed && (
             <button
               className="button"
-              disabled={!(chain.mandateSet || authorized) || isBusy(allow.state)}
+              disabled={
+                !(chain.mandateSet || authorized) ||
+                isBusy(allow.state) ||
+                catchingUp === 'allowance'
+              }
               onClick={() =>
                 void allow
                   .send({
@@ -190,16 +240,17 @@ export function Authorize({ view }: { view: MandateView }) {
                     functionName: 'approve',
                     args: [executor, chain.target],
                   })
-                  .then(after)
+                  .then(after('allowance'))
               }
             >
               Approve {amount}
             </button>
           )}
           <TransactionStatus state={allow.state} confirmedText="Allowance set." />
-        </Step>
+          {updating('allowance')}
+        </StepItem>
 
-        <Step
+        <StepItem
           index={3}
           done={chain.funded}
           title={`Fund your executor with ${amount}`}
@@ -213,7 +264,7 @@ export function Authorize({ view }: { view: MandateView }) {
           {!chain.funded && (
             <button
               className="button"
-              disabled={!chain.allowed || short || isBusy(fund.state)}
+              disabled={!chain.allowed || short || isBusy(fund.state) || catchingUp === 'funding'}
               onClick={() =>
                 void fund
                   .send({
@@ -222,14 +273,15 @@ export function Authorize({ view }: { view: MandateView }) {
                     functionName: 'fund',
                     args: [chain.target],
                   })
-                  .then(after)
+                  .then(after('funding'))
               }
             >
               Fund {amount}
             </button>
           )}
           <TransactionStatus state={fund.state} confirmedText="Executor funded." />
-        </Step>
+          {updating('funding')}
+        </StepItem>
       </ol>
 
       {verifying && (
