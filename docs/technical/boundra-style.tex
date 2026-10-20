@@ -1,0 +1,202 @@
+% Shared Boundra document style: fonts, brand colours, headings, callouts, tables, diagrams.
+% Used by boundra-technical.tex, security-assessment.tex and execution-evidence.tex.
+
+% ---------------------------------------------------------------- Page and fonts
+\usepackage[a4paper,left=2.3cm,right=2.3cm,top=2.6cm,bottom=2.4cm,headheight=14pt]{geometry}
+\usepackage{fontspec}
+\setmainfont{Inter}[Extension=.otf,UprightFont=*-Regular,BoldFont=*-SemiBold,
+  ItalicFont=*-Italic,BoldItalicFont=*-SemiBoldItalic,Scale=0.92]
+\newfontfamily\headfont{SourceSerifPro}[Extension=.otf,UprightFont=*-Semibold,
+  BoldFont=*-Bold,ItalicFont=*-SemiboldIt]
+\setmonofont{SourceCodePro}[Extension=.otf,UprightFont=*-Regular,BoldFont=*-Semibold,Scale=0.86]
+\linespread{1.12}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.55em}
+\usepackage{microtype}
+\usepackage{placeins}
+\setlength{\emergencystretch}{3em}
+
+% ---------------------------------------------------------------- Brand colours (apps/web/src/app/globals.css)
+\usepackage{xcolor}
+\definecolor{bForest}{HTML}{122D27}
+\definecolor{bGreen}{HTML}{23674E}
+\definecolor{bIvory}{HTML}{F6F8F2}
+\definecolor{bSage}{HTML}{9BAF8D}
+\definecolor{bLime}{HTML}{A6C74C}
+\definecolor{bAmber}{HTML}{D8A13B}
+\definecolor{bCharcoal}{HTML}{19332D}
+\definecolor{bMuted}{HTML}{4D6058}
+\definecolor{bMutedDark}{HTML}{B8C7BB}
+\definecolor{bSurface}{HTML}{FCFDF9}
+\definecolor{bSageSoft}{HTML}{E4EBDA}
+\definecolor{bLimeSoft}{HTML}{E1ECBF}
+\definecolor{bAmberSoft}{HTML}{F7E9CB}
+\definecolor{bAmberInk}{HTML}{8A5A0B}
+\definecolor{bLine}{HTML}{D3D9D2}
+\color{bForest}
+
+% ---------------------------------------------------------------- Packages
+\usepackage{tikz}
+\usetikzlibrary{svg.path,positioning,arrows.meta,shapes.geometric,fit,backgrounds,calc,shadows}
+\usepackage[most]{tcolorbox}
+\usepackage{booktabs,tabularx,xltabular,array,colortbl,multirow}
+\usepackage{enumitem}
+\usepackage{titlesec,titletoc}
+\usepackage{fancyhdr}
+\usepackage{listings}
+\usepackage{amsmath}
+\usepackage[hidelinks]{hyperref}
+\hypersetup{pdftitle={Boundra: Technical Document},pdfauthor={Boundra team},
+  colorlinks=true,linkcolor=bGreen,urlcolor=bGreen}
+
+% ---------------------------------------------------------------- Headings
+\titleformat{\chapter}[display]
+  {\headfont\color{bForest}}
+  {\normalfont\small\bfseries\color{bGreen}\MakeUppercase{Chapter}~\thechapter}
+  {4pt}
+  {\Huge}
+  [\vspace{4pt}{\color{bLime}\rule{2.2cm}{2.5pt}}]
+\titlespacing*{\chapter}{0pt}{-12pt}{18pt}
+% A heading always keeps a few lines of its section with it on the page.
+\titleformat{\section}{\headfont\Large\color{bForest}}{\color{bGreen}\thesection}{0.7em}{}
+\titlespacing*{\section}{0pt}{1.4em}{0.5em}
+\titleformat{\subsection}{\headfont\large\color{bForest}}{\color{bGreen}\thesubsection}{0.6em}{}
+\titlespacing*{\subsection}{0pt}{1.1em}{0.35em}
+\titleformat{\paragraph}[runin]{\bfseries\color{bForest}}{}{}{}[.]
+\titlespacing*{\paragraph}{0pt}{0.5em}{0.6em}
+\setcounter{secnumdepth}{2}
+\setcounter{tocdepth}{1}
+
+% Table of contents
+\titlecontents{chapter}[2.2em]{\addvspace{0.42em}\headfont}
+  {\contentslabel[\color{bGreen}\thecontentslabel]{2.2em}}{}{\hfill\contentspage}
+\titlecontents{section}[4.8em]{\small}
+  {\contentslabel[\color{bMuted}\thecontentslabel]{2.6em}}{}
+  {\titlerule*[0.6pc]{\color{bLine}.}\contentspage}
+
+% ---------------------------------------------------------------- Header and footer
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\chaptermark}[1]{\markboth{#1}{}}
+% Each document sets its own name with \renewcommand{\docname}{...} after loading this style.
+\newcommand{\docname}{Technical document}
+\fancyhead[L]{\small\color{bMuted}\brandmark[0.17]\hspace{0.45em}Boundra\,·\,\docname}
+\fancyhead[R]{\small\color{bMuted}\nouppercase{\leftmark}}
+\fancyfoot[R]{\small\color{bGreen}\bfseries\thepage}
+\fancyfoot[L]{\small\color{bMuted}Base Sepolia testnet prototype\,·\,no real funds}
+\renewcommand{\headrule}{{\color{bLine}\hrule height 0.5pt}}
+\fancypagestyle{plain}{\fancyhf{}\renewcommand{\headrule}{}
+  \fancyfoot[R]{\small\color{bGreen}\bfseries\thepage}}
+
+% ---------------------------------------------------------------- Lists
+\setlist{itemsep=0.15em,topsep=0.25em,parsep=0.1em}
+\setlist[itemize,1]{label={\color{bLime}\rule[0.18em]{0.42em}{0.42em}},leftmargin=1.3em}
+\setlist[itemize,2]{label={\color{bSage}\textbullet},leftmargin=1.2em}
+\setlist[enumerate,1]{label={\color{bGreen}\bfseries\arabic*.},leftmargin=1.6em}
+
+% ---------------------------------------------------------------- Brand mark (apps/web/src/components/brand-mark.tsx)
+\newcommand{\markforest}{svg{M9.4 9.7C8.6 10.5 7.3 12 6.3 13.2C5.4 14.5 4.6 15.9 3.8 17.2C3.1 18.5 2.4 19.8 1.9 21.2C1.3 22.6 0.9 24.1 0.5 25.6C0.2 27.1 0.1 28.6 0 30.1C-0.1 31.6 0 33.2 0.2 34.7C0.4 36.2 0.7 37.8 1.1 39.2C1.5 40.7 2 42.1 2.7 43.5C3.3 44.9 4 46.3 4.8 47.6C5.6 48.8 6.5 50.1 7.5 51.2C8.5 52.4 9.6 53.5 10.8 54.4C11.9 55.4 13.1 56.3 14.4 57.2C15.6 58 16.9 58.7 18.3 59.3C19.6 59.9 21 60.5 22.4 60.9C23.8 61.4 25.3 61.8 26.9 62C28.4 62.2 30.1 62.4 31.6 62.3C33.2 62.2 34.9 61.9 36.3 61.4C37.8 61 39.2 60.4 40.5 59.8C41.8 59.1 43.1 58.4 44.2 57.6C45.3 56.8 46.4 55.9 47.4 55C48.4 54.1 49.3 53.1 50.1 52.1C51 51.1 51.8 50 52.3 49.2C52.8 48.4 53.2 47.9 53.3 47.2C53.5 46.5 53.4 45.6 53.2 44.9C53 44.2 52.5 43.5 51.9 43C51.4 42.5 50.6 42.2 49.9 42C49.2 41.9 48.3 41.9 47.6 42.2C47 42.4 46.4 42.8 45.8 43.4C45.1 44 44.3 44.9 43.6 45.5C42.8 46.1 42 46.5 41.3 47C40.5 47.4 39.6 47.8 38.8 48.1C38 48.4 37.1 48.7 36.3 48.9C35.4 49.1 34.6 49.3 33.8 49.3C33 49.4 32.3 49.4 31.5 49.3C30.8 49.2 30 49.1 29.3 48.9C28.5 48.7 27.7 48.4 27 48.1C26.2 47.8 25.4 47.4 24.7 46.9C23.9 46.5 23.2 46 22.6 45.5C21.9 44.9 21.3 44.4 20.8 43.8C20.2 43.2 19.7 42.5 19.2 41.9C18.8 41.2 18.4 40.5 18 39.8C17.6 39 17.3 38.3 17 37.5C16.7 36.7 16.4 35.9 16.2 35.1C16 34.3 15.9 33.5 15.7 32.7C15.6 31.8 15.5 31 15.5 30.1C15.4 29.2 15.4 28.3 15.4 27.3C15.4 26.4 15.3 25.5 15.3 24.4C15.4 23.4 15.6 22.3 15.7 21.1C15.7 20 15.6 18.7 15.8 17.5C16 16.2 16.5 14.7 16.7 13.7C17 12.7 17.3 12.3 17.3 11.6C17.2 10.9 17 10.1 16.6 9.5C16.3 8.9 15.7 8.4 15.1 8C14.5 7.7 13.7 7.5 13 7.5C12.3 7.5 11.5 7.8 10.9 8.1C10.3 8.5 10.2 8.8 9.4 9.7Z}}
+\newcommand{\marksage}{svg{M26.2 9.5C26.9 9.5 27.8 9.3 28.5 9.2C29.2 9.1 29.9 9.1 30.6 9.1C31.3 9.2 32 9.2 32.7 9.3C33.4 9.4 34 9.5 34.7 9.7C35.4 9.8 36 10 36.7 10.2C37.3 10.4 38 10.6 38.6 10.9C39.2 11.1 39.9 11.4 40.5 11.7C41.1 12 41.7 12.3 42.2 12.6C42.8 13 43.4 13.3 43.9 13.7C44.4 14.1 45 14.5 45.5 14.9C46 15.4 46.5 15.8 46.9 16.3C47.4 16.7 47.8 17.2 48.3 17.7C48.7 18.2 49.1 18.7 49.5 19.3C49.9 19.8 50.2 20.3 50.6 20.9C50.9 21.4 51.3 22 51.6 22.6C51.9 23.1 52.2 23.7 52.5 24.3C52.8 24.9 53.1 25.6 53.3 26.2C53.5 26.8 53.8 27.5 54 28.1C54.1 28.8 54.3 29.4 54.4 30.1C54.6 30.8 54.7 31.5 54.7 32.2C54.8 32.9 54.8 33.5 54.8 34.3C54.7 35 54.6 35.8 54.6 36.5C54.6 37.2 54.5 37.9 54.8 38.5C55 39.1 55.4 39.7 55.9 40.1C56.4 40.5 57.1 40.8 57.7 40.9C58.4 41 59.1 40.9 59.7 40.7C60.3 40.4 60.9 40 61.3 39.5C61.7 39 61.8 38.4 62.1 37.7C62.3 37 62.4 36 62.6 35.1C62.7 34.2 62.9 33.3 63 32.3C63.1 31.4 63.1 30.5 63.1 29.5C63.1 28.6 63.1 27.6 63 26.6C63 25.7 62.9 24.7 62.7 23.8C62.5 22.8 62.3 21.8 62 20.9C61.8 20 61.4 19 61.1 18.1C60.7 17.2 60.3 16.3 59.8 15.5C59.3 14.6 58.8 13.8 58.2 13C57.6 12.2 57 11.4 56.3 10.6C55.7 9.9 55 9.2 54.3 8.5C53.5 7.9 52.8 7.2 52 6.7C51.2 6.1 50.4 5.5 49.5 5C48.7 4.5 47.8 4 47 3.6C46.1 3.2 45.2 2.8 44.3 2.5C43.4 2.1 42.4 1.8 41.5 1.6C40.6 1.3 39.6 1.1 38.7 1C37.7 0.9 36.7 0.8 35.8 0.7C34.8 0.7 33.9 0.7 32.9 0.7C32 0.8 31 0.9 30.1 1C29.1 1.1 28.2 1.3 27.3 1.4C26.4 1.6 25.4 1.8 24.7 2.1C24 2.3 23.4 2.5 23 3C22.5 3.4 22.1 4 21.9 4.6C21.7 5.2 21.6 5.9 21.7 6.6C21.9 7.2 22.2 7.8 22.6 8.3C23 8.8 23.7 9.2 24.3 9.4C24.9 9.6 25.5 9.6 26.2 9.5Z}}
+% \brandmarkcol[scale]{outer colour}: the mark on its 64-unit grid (1 unit = 1pt at scale 1),
+% with the forest arc in the given colour. \brandmark[scale] is the light-surface version.
+\newcommand{\brandmarkcol}[2][1]{\begin{tikzpicture}[scale=#1,yscale=-1,
+  baseline={([yshift=-1.2pt]current bounding box.south)}]
+  \fill[#2] \markforest;
+  \fill[bSage] \marksage;
+  \fill[bLime] (32pt,32pt) circle (8.4pt);
+\end{tikzpicture}}
+\newcommand{\brandmark}[1][1]{\brandmarkcol[#1]{bForest}}
+
+% ---------------------------------------------------------------- Callout boxes
+\tcbset{boundra/.style={enhanced,boxrule=0pt,arc=3pt,left=10pt,right=10pt,
+  top=7pt,bottom=7pt,fonttitle=\bfseries\small,coltitle=bForest,attach title to upper,
+  before skip=0.9em,after skip=0.9em}}
+\newtcolorbox{keypoint}[1][Key point]{boundra,colback=bLimeSoft,
+  borderline west={3pt}{0pt}{bGreen},title={#1.\ }}
+\newtcolorbox{note}[1][Note]{boundra,colback=bSageSoft,
+  borderline west={3pt}{0pt}{bSage},title={#1.\ }}
+\newtcolorbox{caution}[1][Caution]{boundra,colback=bAmberSoft,coltitle=bAmberInk,
+  borderline west={3pt}{0pt}{bAmber},title={#1.\ }}
+\newtcolorbox{principle}[1]{enhanced,boxrule=0pt,arc=4pt,colback=bForest,
+  coltext=bIvory,left=12pt,right=12pt,top=9pt,bottom=9pt,fonttitle=\headfont\large,
+  coltitle=bLime,title={#1},attach title to upper={\par\vspace{3pt}},before skip=1em,after skip=1em}
+
+% ---------------------------------------------------------------- Tables
+\newcolumntype{L}{>{\raggedright\arraybackslash}X}
+\newcolumntype{P}[1]{>{\raggedright\arraybackslash}p{#1}}
+\renewcommand{\arraystretch}{1.28}
+\setlength{\tabcolsep}{5pt}
+\arrayrulecolor{bSage}
+\newcommand{\thead}[1]{\textbf{\color{bForest}#1}}
+\newcommand{\headrow}{\rowcolor{bSageSoft}}
+% Tables break across pages (xltabular = longtable + X columns) instead of leaving gaps.
+\setlength{\LTleft}{0pt}
+\setlength{\LTright}{0pt}
+\setlength{\LTpre}{0pt}
+\setlength{\LTpost}{0.4em}
+% A table never starts on a new page away from the heading or text just above it.
+\newenvironment{btable}[1]
+  {\par\nopagebreak\vspace{0.6em}\small\xltabular{\linewidth}{#1}\toprule}
+  {\bottomrule\endxltabular\par}
+% Short tables (up to about eight rows) never split; they move with the heading or text above.
+\newenvironment{stable}[1]
+  {\par\nopagebreak\vspace{0.6em}\small\noindent\tabularx{\linewidth}{#1}\toprule}
+  {\bottomrule\endtabularx\par\vspace{0.4em}}
+
+% Floats: allow them close to their text, and top-align pages that hold only floats.
+\renewcommand{\topfraction}{0.9}
+\renewcommand{\bottomfraction}{0.8}
+\renewcommand{\textfraction}{0.08}
+\renewcommand{\floatpagefraction}{0.8}
+\makeatletter
+\setlength{\@fptop}{0pt}
+\makeatother
+
+% ---------------------------------------------------------------- Code and inline helpers
+\lstdefinestyle{boundra}{basicstyle=\ttfamily\small\color{bForest},backgroundcolor=\color{bSurface},
+  frame=single,rulecolor=\color{bLine},framesep=6pt,xleftmargin=6pt,xrightmargin=6pt,
+  keywordstyle=\color{bGreen}\bfseries,commentstyle=\color{bMuted}\itshape,
+  stringstyle=\color{bAmberInk},columns=fullflexible,keepspaces=true,breaklines=true,
+  showstringspaces=false,aboveskip=0.8em,belowskip=0.6em}
+\lstset{style=boundra}
+\newcommand{\code}[1]{\texttt{\color{bGreen}#1}}
+% Inside dark diagram boxes, code takes the box's text colour instead of green.
+\newcommand{\plaincode}{\renewcommand{\code}[1]{\texttt{##1}}}
+\newcommand{\term}[1]{\textbf{#1}}
+\newcommand{\muted}[1]{{\color{bMuted}#1}}
+
+% ---------------------------------------------------------------- Diagram styles
+\tikzset{
+  box/.style={draw=bForest,line width=0.6pt,rounded corners=3pt,fill=white,align=center,
+    font=\small,inner sep=5pt,minimum height=9mm,text=bForest,
+    execute at begin node={\hyphenpenalty=10000\exhyphenpenalty=10000}},
+  % On dark fills, code takes the box's text colour instead of green.
+  boxdark/.style={box,fill=bForest,text=bIvory,draw=bForest,
+    execute at begin node={\hyphenpenalty=10000\exhyphenpenalty=10000\plaincode}},
+  boxgreen/.style={box,fill=bGreen,text=white,draw=bGreen,
+    execute at begin node={\hyphenpenalty=10000\exhyphenpenalty=10000\plaincode}},
+  boxlime/.style={box,fill=bLimeSoft},
+  boxsage/.style={box,fill=bSageSoft},
+  boxamber/.style={box,fill=bAmberSoft,draw=bAmberInk},
+  boxghost/.style={box,draw=bSage,dashed,text=bMuted},
+  arr/.style={-{Stealth[length=2.2mm,width=1.8mm]},line width=0.65pt,draw=bGreen},
+  arrm/.style={arr,draw=bMuted},
+  arrd/.style={arr,dashed,draw=bMuted},
+  arra/.style={arr,draw=bAmberInk},
+  biarr/.style={{Stealth[length=2.2mm,width=1.8mm]}-{Stealth[length=2.2mm,width=1.8mm]},
+    line width=0.65pt,draw=bGreen},
+  lbl/.style={font=\scriptsize,text=bMuted,fill=white,inner sep=1.5pt,align=center},
+  lblc/.style={font=\scriptsize,text=bMuted,inner sep=1.5pt,align=center},
+  zone/.style={draw=bSage,line width=0.6pt,dashed,rounded corners=6pt,inner sep=9pt},
+  zonefill/.style={fill=bSurface,draw=bSage,line width=0.6pt,rounded corners=6pt,inner sep=9pt},
+  zonetitle/.style={font=\scriptsize\bfseries,text=bGreen,fill=white,inner sep=2pt},
+  state/.style={draw=bForest,line width=0.6pt,rounded corners=7pt,fill=white,font=\scriptsize\ttfamily,
+    inner sep=4pt,minimum height=7mm,text=bForest},
+  stateok/.style={state,fill=bLimeSoft},
+  statebad/.style={state,fill=bAmberSoft,draw=bAmberInk},
+  statedone/.style={state,fill=bSageSoft},
+  stepdot/.style={circle,fill=bGreen,text=white,font=\scriptsize\bfseries,inner sep=1.4pt,minimum size=4.6mm},
+}
+\newcommand{\stepno}[1]{\tikz[baseline=-0.6ex]\node[stepdot]{#1};}
+
+\newcommand{\figcaption}[1]{\par\vspace{0.3em}{\centering\small\color{bMuted}#1\par}\vspace{0.6em}}

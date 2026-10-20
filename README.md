@@ -8,15 +8,15 @@ Built and tested: Person 1's contracts (deployed on Base Sepolia, reviewed manif
 
 The full flow is proven end to end on a local anvil chain (`pnpm test:e2e:chain`, `pnpm test:e2e:real`), and the stack runs against the Base Sepolia deployment. Still open: the frozen 50-persona benchmark run, monitoring and alerts, and an independent security review. No addresses, transaction hashes, benchmark results or performance claims are invented.
 
-| Document                                                                       | Where                                                                                                    |
-| ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
-| Technical documentation (architecture, core algorithm, security design)        | [docs/technical/boundra-technical.pdf](./docs/technical/boundra-technical.pdf)                           |
-| Contract security self-assessment                                              | [docs/security.md](./docs/security.md)                                                                   |
-| Execution evidence (real Base Sepolia transactions, including the agent's own) | [docs/execution-evidence.md](./docs/execution-evidence.md)                                               |
-| Deployment instructions                                                        | [docs/runbook.md](./docs/runbook.md), [docs/deploy-render.md](./docs/deploy-render.md)                   |
-| API, ACCE, data model                                                          | [docs/api.md](./docs/api.md), [docs/acce.md](./docs/acce.md), [docs/data-model.md](./docs/data-model.md) |
-| SDK and MCP server                                                             | [docs/roadmap-sdk-mcp.md](./docs/roadmap-sdk-mcp.md)                                                     |
-| Tests                                                                          | [Checks](#checks) below: unit, integration, contract, chain end-to-end and browser suites                |
+| Document                                                                       | Where                                                                                                                                             |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Technical documentation (architecture, core algorithm, security design)        | [docs/technical/boundra-technical.pdf](./docs/technical/boundra-technical.pdf)                                                                    |
+| Security self-assessment report (permission tiers, known-risk list)            | [docs/technical/security-assessment.pdf](./docs/technical/security-assessment.pdf); contracts: [docs/security.md](./docs/security.md)             |
+| Execution evidence (real Base Sepolia transactions, including the agent's own) | [docs/technical/execution-evidence.pdf](./docs/technical/execution-evidence.pdf); also [docs/execution-evidence.md](./docs/execution-evidence.md) |
+| Deployment instructions                                                        | [docs/runbook.md](./docs/runbook.md), [docs/deploy-render.md](./docs/deploy-render.md)                                                            |
+| API, ACCE, data model                                                          | [docs/api.md](./docs/api.md), [docs/acce.md](./docs/acce.md), [docs/data-model.md](./docs/data-model.md)                                          |
+| SDK and MCP server                                                             | [docs/roadmap-sdk-mcp.md](./docs/roadmap-sdk-mcp.md)                                                                                              |
+| Tests                                                                          | [Checks](#checks) below: unit, integration, contract, chain end-to-end and browser suites                                                         |
 
 ## Requirements
 
