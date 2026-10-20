@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { maxUint256, type Address, type Hash } from 'viem';
 import { VAULTS } from '@/lib/acce-copy';
 import { formatMockUsdc, parseMockUsdc } from '@/lib/amount';
@@ -71,6 +71,27 @@ function VaultCard({
   // The last confirmed change; kept after the buttons swap for the new state.
   const [notice, setNotice] = useState<{ text: string; hash: Hash } | null>(null);
   const capacity = readCapacity(limited, capacityText);
+  // A public RPC endpoint can answer from a node a block or two behind the receipt, so keep
+  // re-reading until the vault shows the confirmed risk level, for at most a minute, with the
+  // buttons disabled meanwhile so the change is not sent twice.
+  const [expected, setExpected] = useState<keyof typeof RISK_LEVEL | null>(null);
+  const reread = useRef(onChanged);
+  reread.current = onChanged;
+  const shown = expected === null || condition.risk === expected;
+  useEffect(() => {
+    if (expected === null) return;
+    if (shown) {
+      setExpected(null);
+      return;
+    }
+    const timer = setInterval(() => reread.current(), 2000);
+    const stop = setTimeout(() => setExpected(null), 60_000);
+    return () => {
+      clearInterval(timer);
+      clearTimeout(stop);
+    };
+  }, [expected, shown]);
+  const busy = isBusy(tx.state) || expected !== null;
 
   const apply = async (level: keyof typeof RISK_LEVEL, value: bigint | null, text: string) => {
     setNotice(null);
@@ -85,6 +106,7 @@ function VaultCard({
     tx.reset();
     setTouched(false);
     onChanged();
+    setExpected(level);
   };
 
   const option = (value: boolean, label: string, hint: string) => (
@@ -148,7 +170,7 @@ function VaultCard({
             );
           }}
         >
-          <fieldset className="field" disabled={isBusy(tx.state)}>
+          <fieldset className="field" disabled={busy}>
             <legend>
               {degraded ? 'Change the withdrawal capacity' : 'Simulate degraded conditions'}
             </legend>
@@ -186,14 +208,14 @@ function VaultCard({
             )}
           </fieldset>
           <div className="form-actions">
-            <button className="button" type="submit" disabled={isBusy(tx.state)}>
+            <button className="button" type="submit" disabled={busy}>
               {degraded ? `Update ${name}’s capacity` : `Mark ${name} degraded`}
             </button>
             {degraded && (
               <button
                 type="button"
                 className="button button-quiet"
-                disabled={isBusy(tx.state)}
+                disabled={busy}
                 onClick={() =>
                   void apply('NORMAL', null, `${name} is back to normal, withdrawals unlimited.`)
                 }
