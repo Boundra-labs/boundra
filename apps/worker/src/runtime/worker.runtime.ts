@@ -22,7 +22,11 @@ export function buildWorker(
 ) {
   if (activation.mode === 'observe_only' || !activation.reader) return null;
   const leases = new LeaseManager(db);
-  const monitor = new RiskEventMonitor(activation.reader, new PostgresMonitorStore(db, leases));
+  const monitor = new RiskEventMonitor(
+    activation.reader,
+    new PostgresMonitorStore(db, leases),
+    BigInt(config.MONITOR_BATCH_BLOCKS),
+  );
   let execution: ConstructorParameters<typeof Orchestrator>[0]['execution'];
   if (activation.mode === 'execute' && activation.operator && activation.limits) {
     const store = new PostgresExecutionStore(

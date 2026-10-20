@@ -35,11 +35,17 @@ export interface MonitorStore {
   ): Promise<void>;
 }
 
+/**
+ * Blocks scanned per poll. Each eth_getLogs query spans batchSize + overlap - 1 blocks; the public
+ * Base Sepolia RPC accepts at most about 200, so the default stays below that.
+ */
+export const DEFAULT_MONITOR_BATCH_BLOCKS = 180;
+
 export class RiskEventMonitor {
   constructor(
     private readonly reader: BoundraChainReader,
     private readonly store: MonitorStore,
-    private readonly batchSize = 500n,
+    private readonly batchSize = BigInt(DEFAULT_MONITOR_BATCH_BLOCKS),
     private readonly overlap = 20n,
   ) {
     if (
