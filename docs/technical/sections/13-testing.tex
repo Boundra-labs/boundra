@@ -1,0 +1,58 @@
+\chapter{Testing and evidence}\label{ch:testing}
+
+Every part has its own tests, and two suites run the whole system with nothing mocked. The counts below are from the last full local run.
+
+\section{Test suites}
+
+\begin{btable}{@{}P{4.6cm}>{\raggedleft\arraybackslash}p{1.2cm}L@{}}
+\headrow \thead{Suite} & \thead{Tests} & \thead{What it proves}\\ \midrule\endhead
+Contracts (Foundry) & 32 & Unit, fuzz and stateful invariant tests of every rule in chapter~\ref{ch:contracts}.\\
+ACCE & 20 & Question selection, scoring, narrowing, vault selection and the mandate builder.\\
+Language model & 23 & Request shape, limits, validation and every fallback, for both providers.\\
+API integration & 24 & Sessions, API tokens, intents, drafts, approvals and owner isolation against real PostgreSQL.\\
+Worker integration & 29 & Stores, leases, crash recovery, concurrency and orchestration against real PostgreSQL.\\
+Worker unit & 19 & Decisions, execution service and the risk monitor.\\
+SDK unit / on chain & 8 / 5 & The client, and the operator against the real contracts on a local chain.\\
+MCP server & 8 & Tool sets, refusals and configuration errors with a real MCP client.\\
+Browser, mocked API & 53 & Every screen and owner transaction against the real contracts on a local chain.\\
+Browser, real stack & 2 & The full journey with nothing mocked (below).\\
+Worker full flow on chain & 1 flow & Deposit, risk exit, escalation and revocation on a local chain.\\
+\end{btable}
+
+\section{The end-to-end journey}
+
+The real-stack browser suite starts the API and the worker (in \code{execute} mode) on a temporary database and a local chain, and runs:
+
+\begin{center}
+\begin{tikzpicture}[node distance=0.32cm]
+  \foreach \t [count=\i] in {Sign in,Set up,Goal,ACCE,Review,Authorize\\and fund,Agent\\deposits,Risk\\event,Agent exits,Revoke,Owner\\recovers}{
+    \pgfmathtruncatemacro{\row}{(\i-1)/6}
+    \pgfmathtruncatemacro{\col}{mod(\i-1,6)}
+    \ifnum\i=8 \def\sty{boxamber}\else\ifnum\i>6 \def\sty{boxlime}\else\def\sty{box}\fi\fi
+    \node[\sty,text width=1.95cm,minimum height=1.1cm,font=\scriptsize]
+      (s\i) at (\col*2.55,-\row*1.95) {\stepno{\i}\\\t};
+  }
+  \foreach \a/\b in {1/2,2/3,3/4,4/5,5/6,7/8,8/9,9/10,10/11}{\draw[arr] (s\a) -- (s\b);}
+  \draw[arr] (s6.south) -- ++(0,-0.42) -| (s7.north);
+\end{tikzpicture}
+\end{center}
+
+It also runs a same-prompt walkthrough with two personas that answer differently and get different mandates, and a language-model outage that falls back to labelled templates without blocking anything.
+
+\section{Benchmark: B0–B3}
+
+The evaluation runner compares four ways of reaching a mandate. All use the same mandate builder and action set; only elicitation and consent differ.
+
+\begin{stable}{@{}P{1.2cm}P{6.6cm}L@{}}
+\headrow \thead{Method} & \thead{Elicitation} & \thead{Consent}\\ \midrule
+B0 & One model call reads preferences from the goal text & The draft is the mandate\\
+B1 & Same one-shot draft & Static confirmation screen\\
+B2 & Five fixed questions: liquidity, lockup, leverage, amount, vaults & Same approval step as the product\\
+B3 & ACCE adaptive questions & Same approval step as the product\\
+\end{stable}
+
+A \emph{mismatch} is a mandate that breaks at least one of the persona's non-negotiable preferences. The fixture has 50 personas (20 development, 30 held out). Hidden preferences are read only by the simulator, a lint rule stops baselines from importing it, and the held-out split refuses to run until the fixture is frozen.
+
+\begin{caution}[No results claimed yet]
+The benchmark fixture is awaiting its label review and freeze, so no benchmark results are reported here. Results will be published only after a frozen, held-out run.
+\end{caution}

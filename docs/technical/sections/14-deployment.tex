@@ -1,0 +1,92 @@
+\chapter{Deployment and operations}\label{ch:deployment}
+
+Boundra ships as Docker images built from one Dockerfile, and can run in two ways: a Docker Compose stack on any server, or Render. Both use the same images and the same reviewed Base Sepolia manifest.
+
+\section{Docker Compose stack}
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+  \node[boxsage,text width=2.5cm] (caddy) at (0,0) {\textbf{Caddy}\\\scriptsize HTTPS, HSTS\\\code{--profile public}};
+  \node[box,text width=2.4cm] (web) at (4.1,1.05) {\textbf{web}\\\scriptsize port 3000};
+  \node[box,text width=2.4cm] (api) at (4.1,-1.05) {\textbf{api}\\\scriptsize port 3001};
+  \node[boxlime,text width=2.4cm] (migrate) at (8.0,1.05) {\textbf{migrate}\\\scriptsize runs once};
+  \node[boxdark,text width=2.4cm] (worker) at (8.0,-1.05) {\textbf{worker}};
+  \node[box,text width=2.5cm] (pg) at (11.9,0) {\textbf{postgres 17}\\\scriptsize loopback only};
+  \node[boxghost,text width=2.5cm] (backup) at (11.9,2.1) {\textbf{backup}\\\scriptsize every 6 h, keep 28};
+  \draw[arr] (caddy.north east) -- node[lbl,above left=0pt]{pages} (web.west);
+  \draw[arr] (caddy.south east) -- node[lbl,below left=0pt]{\code{/api/*}} (api.west);
+  \draw[arr] (web) -- (api);
+  \draw[arr] (migrate.east) -- (pg.north west);
+  \draw[arr] (worker.east) -- (pg.south west);
+  \draw[arr] (api.south) -- ++(0,-0.55) -| (pg.south);
+  \draw[arrm] (backup) -- (pg);
+\end{tikzpicture}
+\caption{Start order is enforced: migrations finish before the worker starts, and the API waits for a healthy worker.}
+\end{figure}
+
+\begin{itemize}
+  \item Settings come from \code{deploy/.env} (created by \code{node scripts/setup.mjs --deploy}; secrets readable by the operator only). The manifest is mounted read-only from \code{deploy/manifests/}.
+  \item With a public \code{APP\_DOMAIN} whose DNS points at the host, Caddy obtains and renews Let's Encrypt certificates itself.
+  \item Releases: tagging a green commit \code{v*} publishes \code{boundra-\{web,api,worker,migrate\}} images to GHCR. Each image carries its release identifier, which \code{/status} and the health endpoints report.
+  \item A backup is taken before every upgrade; migrations only move forward, so a rollback that crosses a migration restores the backup.
+\end{itemize}
+
+\section{Render, free plan}
+
+Render has no free plan for background workers or private services, so the Blueprint (\code{render.yaml}) runs everything in \emph{one} free web service, with a free PostgreSQL database.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+  \node[boxsage,text width=2.6cm] (edge) at (0,0) {\textbf{Render edge}\\\scriptsize HTTPS};
+  \node[box,text width=2.7cm] (web) at (4.4,0.95) {\textbf{web app}\\\scriptsize Render's \code{PORT}};
+  \node[box,text width=2.7cm] (api) at (4.4,-0.95) {\textbf{API}\\\scriptsize \code{127.0.0.1:3001}};
+  \node[boxdark,text width=2.7cm] (worker) at (8.2,-0.95) {\textbf{worker}};
+  \node[boxlime,text width=2.7cm] (mig) at (8.2,0.95) {\textbf{migrations}\\\scriptsize at every start};
+  \begin{scope}[on background layer]
+    \node[zonefill,fit=(web)(api)(worker)(mig)] (box) {};
+  \end{scope}
+  \node[zonetitle,anchor=west] at ($(box.north west)+(0.3,0)$) {one free web service: \code{deploy/render-free.sh}};
+  \node[box,text width=2.4cm] (pg) at (12.4,0) {\textbf{Render Postgres}\\\scriptsize free};
+  \draw[arr] (edge) -- (web);
+  \draw[arr] (web) -- node[lbl,right=2pt]{\code{/api/v1}} (api);
+  \draw[arr] (box.east |- pg) -- (pg);
+\end{tikzpicture}
+\caption{If any of the three processes exits, the container exits and Render restarts it.}
+\end{figure}
+
+\begin{stable}{@{}P{4.2cm}L@{}}
+\headrow \thead{Measured locally under the free limits} & \thead{Result (512 MB memory, 0.1 CPU)}\\ \midrule
+Start-up on a fresh database & About 2 minutes to ready, all 5 migrations applied\\
+Memory in use & 413 MB of 512 MB (heap caps per process)\\
+Pages and assets & Served, including static files\\
+A process crashes & The container exits so Render restarts it\\
+\end{stable}
+
+\begin{caution}[Free-plan limits]
+A free service sleeps after about 15 minutes without visitors, and the agent sleeps with it; the next visit takes about a minute to wake it. Free instance hours are limited per month, and the free database expires after Render's free period. Switching the service and database to paid plans removes these limits without other changes.
+\end{caution}
+
+\section{Settings that matter}
+
+\begin{btable}{@{}P{5.3cm}L@{}}
+\headrow \thead{Setting} & \thead{Purpose}\\ \midrule\endhead
+\code{DEPLOYMENT\_MANIFEST\_PATH} & The reviewed manifest; without it the worker only observes.\\
+\code{WEB\_ORIGIN} & The exact public origin; sign-in messages and the Origin check depend on it.\\
+\code{OPERATOR\_ADDRESS} & Boundra's agent, public address only (API).\\
+\code{OPERATOR\_PRIVATE\_KEY} & The agent's own key (worker only). Never the owner's, deployer's or risk admin's.\\
+\code{EXECUTION\_ENABLED}, \code{ATTEMPT\_ENCRYPTION\_KEY}, \code{MAX\_GAS}, \code{MAX\_FEE\_PER\_GAS\_WEI}, \code{MAX\_PRIORITY\_FEE\_PER\_GAS\_WEI} & Required for \code{execute} mode. Fee caps are ceilings: above them the worker skips the action rather than overpay.\\
+\code{MONITOR\_BATCH\_BLOCKS} & Risk-scan size (180 fits the public RPC).\\
+\code{ADMIN\_ADDRESSES} & Wallets allowed to use admin routes (lowercase).\\
+\code{LLM\_PROVIDER}, \code{LLM\_MODEL}, \code{LLM\_API\_KEY} & Optional wording provider (chapter~\ref{ch:llm}).\\
+\code{TRUST\_PROXY} & True only behind a trusted proxy (Caddy or Render).\\
+\end{btable}
+
+\section{Checking a deployment}
+
+\begin{enumerate}
+  \item \code{/status} reports \code{"status": "ok"} and \code{"worker": "execute"}; \code{monitor\_only} means a worker setting is missing or rejected, and the logs name which (never its value).
+  \item \code{/api/v1/health/ready} reports the database as connected and a fresh worker heartbeat.
+  \item The worker logs show \code{Worker mode: execute} and no repeated monitor failures. On first start the risk monitor needs about 40 minutes to catch up from the deployment block.
+\end{enumerate}

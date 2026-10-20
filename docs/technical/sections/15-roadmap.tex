@@ -1,0 +1,31 @@
+\chapter{Limitations and roadmap}\label{ch:roadmap}
+
+\section{Known limitations}
+
+\begin{stable}{@{}P{4.4cm}L@{}}
+\headrow \thead{Limitation} & \thead{Why, and what it means}\\ \midrule
+Testnet only & Base Sepolia, MockUSDC and two controlled mock vaults. Illustrative yields do not accrue; principal stays 1:1.\\
+Small action set & Two vaults and one deposit allocation per mandate. Deliberately narrow, so the guarantees are easy to check.\\
+Risk events are a fixture & A risk admin sets vault risk by hand to stand in for a real incident; there is no oracle.\\
+No fee replacement & A stuck transaction is reconciled or released after its deadline; fees are never bumped automatically.\\
+Benchmark not yet run & The persona fixture awaits label review and freeze; no results are claimed.\\
+Packages not published & The SDK and MCP server are built and tested but not on npm; publishing needs a licence decision.\\
+Free hosting sleeps & On Render's free plan the agent sleeps with the service when nobody visits.\\
+\end{stable}
+
+\section{Roadmap}
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[node distance=0.45cm]
+  \node[boxgreen,text width=3.2cm,minimum height=2.1cm] (p1) {\textbf{1. Read-only MCP}\\[2pt]\scriptsize done};
+  \node[boxgreen,text width=3.2cm,minimum height=2.1cm,right=of p1] (p2) {\textbf{2. Owner SDK and prepared actions}\\[2pt]\scriptsize done};
+  \node[boxlime,text width=3.2cm,minimum height=2.1cm,right=of p2] (p3) {\textbf{3. Bring your own agent}\\[2pt]\scriptsize done on testnet; security review recommended};
+  \node[boxghost,text width=3.2cm,minimum height=2.1cm,right=of p3] (p4) {\textbf{4. Beyond testnet}\\[2pt]\scriptsize audit, real vaults, more actions, publishing, legal review};
+  \draw[arr] (p1) -- (p2); \draw[arr] (p2) -- (p3); \draw[arr] (p3) -- (p4);
+\end{tikzpicture}
+\end{figure}
+
+\begin{principle}{Before any real funds}
+An independent audit of the contracts, integrations with real, reviewed vaults, a review of the agent's policy for real market conditions, and a legal review. Until then, Boundra stays on testnet.
+\end{principle}

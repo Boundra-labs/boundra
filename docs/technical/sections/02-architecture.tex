@@ -1,0 +1,86 @@
+\chapter{System architecture}\label{ch:architecture}
+
+Boundra has four running parts (web app, API, worker, database) and a set of contracts on Base Sepolia. The owner's wallet talks to the contracts directly; the backend never signs for the owner. Figure~\ref{fig:architecture} shows how they connect.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+  % Top row: people, clients and the optional model provider
+  \node[boxlime,text width=3.0cm] (owner) at (1.1,0) {\textbf{Owner}\\\scriptsize browser + own wallet};
+  \node[boxghost,text width=3.0cm] (llm) at (6.3,0) {\textbf{LLM provider}\\\scriptsize optional, wording only};
+  \node[boxsage,text width=3.2cm] (apps) at (11.6,0) {\textbf{Apps \& AI assistants}\\\scriptsize SDK, MCP, own agents};
+
+  % Deployment
+  \node[box,text width=3.0cm] (web) at (1.1,-2.8) {\textbf{Web app}\\\scriptsize Next.js, \code{/api/v1} proxy};
+  \node[box,text width=3.0cm] (api) at (6.3,-2.8) {\textbf{API}\\\scriptsize NestJS, SIWE, ACCE};
+  \node[box,text width=3.0cm] (db) at (6.3,-5.1) {\textbf{PostgreSQL 17}\\\scriptsize workflow, jobs, history};
+  \node[boxdark,text width=3.0cm] (worker) at (11.6,-5.1) {\textbf{Worker}\\\scriptsize monitor, policy, execution};
+  \begin{scope}[on background layer]
+    \node[zonefill,fit=(web)(api)(db)(worker)] (dep) {};
+  \end{scope}
+  \node[zonetitle,anchor=west] at ($(dep.north west)+(2.3,0)$) {Boundra deployment};
+
+  % Chain
+  \node[box,text width=3.0cm] (factory) at (1.1,-8.2) {\textbf{BoundraFactory}\\\scriptsize one executor per owner};
+  \node[boxgreen,text width=3.0cm] (exec) at (6.3,-8.2) {\textbf{BoundraExecutor}\\\scriptsize the owner's mandate};
+  \node[box,text width=3.0cm] (vaults) at (11.6,-8.2) {\textbf{Liquid and Timed vaults}\\\scriptsize MockUSDC, faucet};
+  \begin{scope}[on background layer]
+    \node[zonefill,fit=(factory)(exec)(vaults)] (chain) {};
+  \end{scope}
+  \node[zonetitle,anchor=north west] at ($(chain.south west)+(0.25,-0.12)$) {Base Sepolia (chain 84532)};
+
+  % Flows
+  \draw[arr] (owner) -- node[lbl]{HTTPS, one origin} (web);
+  \draw[arr] (web) -- node[lbl]{forwards} (api);
+  \draw[biarr] (api) -- (db);
+  \draw[biarr] (db) -- (worker);
+  \draw[arrd] (api) -- node[lbl]{reword} (llm);
+  \draw[arr] (apps.south) to[out=-90,in=0] node[lbl,pos=0.45]{bearer token} (api.east);
+  \draw[arr] (worker.south west) -- node[lbl,pos=0.5]{operator actions\\(agent's own key)} (exec.north east);
+  \draw[arrm] (api.south west) -- node[lbl,pos=0.55]{reads} (factory.north east);
+  \draw[arr] (exec) -- node[lbl,above=1pt]{deposit,} node[lbl,below=1pt]{withdraw} (vaults);
+  \draw[arrm] (factory) -- node[lbl,above=1pt]{creates} (exec);
+  % The owner signs on chain directly, around the deployment.
+  \draw[arr,draw=bLime!60!bForest] (owner.west) -- ++(-0.75,0) coordinate (bend)
+    -- node[lbl,rotate=90]{owner signs: create executor, setMandate, fund, pause, revoke}
+    (bend |- factory.west) -- (factory.west);
+\end{tikzpicture}
+\caption{The parts of Boundra and how they talk. Green arrows carry authority; grey arrows only read.}
+\label{fig:architecture}
+\end{figure}
+
+\section{Who does what}
+
+\begin{stable}{@{}P{2.6cm}P{6.4cm}L@{}}
+\headrow \thead{Part} & \thead{Does} & \thead{Never does}\\ \midrule
+Owner's wallet & Signs sign-in messages and every owner transaction: create executor, set mandate, approve and fund, pause, resume, revoke, recover. & Hands its key to anyone.\\
+Web app & Guides the owner, prepares the exact transactions, shows chain-confirmed state, forwards \code{/api/v1/*} to the API so the browser sees one origin. & Hold keys or secrets.\\
+API & Sessions, intents and ACCE questions, mandate drafts and previews, dashboard and activity from confirmed state. & Sign transactions or move funds.\\
+Worker & Watches vault risk, decides what the agent should do, and executes bounded operator transactions with the agent's own key. & Act outside a confirmed mandate, or for a mandate naming another agent.\\
+Executor contract & Enforces the mandate on every operator call; pays withdrawals to the owner. & Accept arbitrary calls, recipients or upgrades.\\
+\end{stable}
+
+\begin{keypoint}[One origin]
+The browser only ever talks to the web app's origin. Sessions use a first-party \code{\_\_Host-} cookie, and every state-changing request must carry that exact \code{Origin}. The web app's route handler forwards \code{/api/v1/*} to the API (in a public Compose deployment, Caddy routes it directly), so the cookie never crosses sites.
+\end{keypoint}
+
+\section{Repository layout}
+
+The code is one pnpm workspace (Node.js 22.22, pnpm 10.32). Each team member owns parts of it.
+
+\begin{btable}{@{}P{4.4cm}L@{}}
+\headrow \thead{Path} & \thead{Contents}\\ \midrule\endhead
+\code{contracts/} & Solidity contracts, Foundry tests and the deploy script (Person 1).\\
+\code{packages/chain} & Generated ABIs, the deployment-manifest schema, \code{BoundraChainReader} and \code{prepareAction}.\\
+\code{packages/shared} & Zod schemas, exact amount types, stable error codes.\\
+\code{packages/database} & Prisma schema, migrations, client and the job queue.\\
+\code{packages/acce} & The ACCE planner, vault selection and the mandate builder.\\
+\code{packages/llm} & Optional language-model providers with validation and fallbacks.\\
+\code{packages/sdk} & \code{@boundra/sdk}: owner API client and bounded operator.\\
+\code{apps/api} & NestJS REST API with OpenAPI.\\
+\code{apps/worker} & Chain boundary (\code{chain/}), decisions and jobs (\code{orchestration/}), stores (\code{persistence/}).\\
+\code{apps/web} & Next.js owner app and landing page.\\
+\code{apps/mcp} & MCP server for AI assistants.\\
+\code{evaluation/} & B0–B3 benchmark runner and persona fixtures.\\
+\code{deploy/}, \code{compose.yaml}, \code{render.yaml} & Deployment: Compose stack, Caddy, backups, manifests, Render.\\
+\end{btable}

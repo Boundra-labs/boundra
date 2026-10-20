@@ -1,0 +1,39 @@
+\appendix
+\chapter{Glossary}\label{ch:glossary}
+
+\begin{btable}{@{}P{3.6cm}L@{}}
+\headrow \thead{Term} & \thead{Meaning}\\ \midrule\endhead
+ACCE & Action-Conditioned Counterfactual Elicitation: asks only questions whose answer could change the agent's allowed action.\\
+Action ID & A unique identifier for one agent action; the executor accepts each only once.\\
+Allocation & The single deposit a mandate allows; a partial deposit also completes it.\\
+Base Sepolia & Base's public test network (chain 84532).\\
+Confirmation depth & How many blocks deep state must be before it is trusted (5 by default).\\
+DecisionFlip & How often an answer to one dimension changes the selected action, over all combinations of the others.\\
+Escalation & The agent stops and tells the owner, because no allowed action fits.\\
+Executor & The owner's own contract: holds funds, stores the mandate, checks every agent call.\\
+Fencing token & A number that grows with every new lease, so an outdated lease holder cannot write.\\
+Mandate & The twelve-field set of limits the owner signs into their executor.\\
+Manifest & The reviewed list of contract addresses and code hashes the backend trusts.\\
+MCP & Model Context Protocol, the standard AI assistants use to call tools.\\
+MockUSDC & The test stablecoin (6 decimals) used instead of real money.\\
+Operator & The agent allowed by a mandate to call \code{executeDeposit} and \code{executeWithdraw}.\\
+Preview hash & keccak256 of the canonical preview; approval must present it.\\
+Reorg & A chain reorganisation, where recent blocks are replaced; handled by confirmation depth, overlap and re-checks.\\
+Risk admin & The account that sets the mock vaults' risk state for the demo.\\
+SIWE & Sign-In with Ethereum (EIP-4361): proving wallet ownership by signing a message.\\
+\end{btable}
+
+\chapter{Where to find things}
+
+\begin{btable}{@{}P{5.4cm}L@{}}
+\headrow \thead{Topic} & \thead{Source}\\ \midrule\endhead
+Contract rules & \code{docs/contracts.md}, \code{docs/security.md}, \code{contracts/src/}\\
+Chain integration & \code{docs/chain-integration.md}, \code{packages/chain}\\
+ACCE and agent policy & \code{docs/acce.md}, \code{packages/acce}, \code{apps/worker/src/orchestration/decision.ts}\\
+Execution and monitoring & \code{docs/worker-chain-port.md}, \code{apps/worker/src/chain/}\\
+Data model & \code{docs/data-model.md}, \code{packages/database/prisma/schema.prisma}\\
+API & \code{docs/api.md}, \code{docs/openapi.json}\\
+SDK and MCP & \code{docs/roadmap-sdk-mcp.md}, \code{packages/sdk}, \code{apps/mcp}\\
+Operations & \code{docs/runbook.md}, \code{docs/deploy-render.md}, \code{compose.yaml}, \code{render.yaml}\\
+Benchmark & \code{evaluation/README.md}\\
+\end{btable}

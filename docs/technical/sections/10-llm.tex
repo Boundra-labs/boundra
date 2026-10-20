@@ -1,0 +1,42 @@
+\chapter{Language model use}\label{ch:llm}
+
+Boundra uses a language model for one narrow job: making text read naturally. It rewords a question ACCE has already chosen, or restates facts from a preview as a short summary. It never decides what is asked, which vault is used or what the limits are.
+
+\section{Providers}
+
+\begin{stable}{@{}P{2.8cm}P{4.6cm}L@{}}
+\headrow \thead{\code{LLM\_PROVIDER}} & \thead{Model} & \thead{How it is called}\\ \midrule
+\code{disabled} (default) & none & Reviewed templates, labelled \code{TEMPLATE} wherever they are shown.\\
+\code{openai} & \code{LLM\_MODEL}, required (for example \code{gpt-4.1-mini}) & Chat completions with strict structured output; low reasoning effort for reasoning models; refusals and content filtering count as a refusal.\\
+\code{anthropic} & \code{claude-opus-5-5} by default & Structured output, low effort, server-side refusal fallback.\\
+\end{stable}
+
+Both providers share the same limits: a 20-second deadline for the whole call, at most three attempts, a cap on output tokens and an hourly token budget (settings \code{LLM\_DEADLINE\_MS}, \code{LLM\_MAX\_OUTPUT\_TOKENS} and \code{LLM\_MAX\_TOKENS\_PER\_HOUR}). When the budget is spent, the template is used instead of spending more.
+
+\section{Validation and fallback}
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[node distance=0.55cm]
+  \node[boxsage,text width=2.9cm] (tpl) {\textbf{ACCE question}\\\scriptsize template text + alternatives};
+  \node[boxghost,text width=2.6cm,right=of tpl] (llm) {\textbf{Model}\\\scriptsize rewording};
+  \node[box,text width=3.2cm,right=of llm] (val) {\textbf{Validate}\\\scriptsize schema, same options, no new facts};
+  \node[boxgreen,text width=3.0cm,right=0.9cm of val,yshift=1.0cm] (ok) {\textbf{Valid: model text}\\\scriptsize labelled \code{LLM}};
+  \node[boxlime,text width=3.0cm,right=0.9cm of val,yshift=-1.0cm] (fb) {\textbf{Otherwise: template}\\\scriptsize reason logged};
+  \draw[arr] (tpl) -- (llm); \draw[arr] (llm) -- (val);
+  \draw[arr] (val.east) -- (ok.west);
+  \draw[arra] (val.east) -- (fb.west);
+  \draw[arra] (llm.south) -- ++(0,-1.45) -| node[lbl,pos=0.25,below=2pt]{timeout, refusal, error, budget spent} (fb.south);
+\end{tikzpicture}
+\caption{Every model output is checked; anything doubtful falls back to the reviewed template.}
+\end{figure}
+
+A reworded question must keep the same alternative IDs in the same order. Any output that adds numbers, vaults, protocols, addresses, links or guarantees is rejected. The fallback reason (\code{NEW\_NUMBER}, \code{ALTERNATIVES\_CHANGED}, \code{TIMEOUT}, \code{REFUSAL} and so on) is recorded in the activity log, and the screen shows whether the text came from the model or the template.
+
+\begin{keypoint}[Why this is safe]
+The model sees only the template question and its alternatives, or the preview's facts. It cannot change what the owner is asked, what they approve, or what the contract enforces. With the model disabled, Boundra works exactly the same.
+\end{keypoint}
+
+\begin{note}[Verified live]
+A real call from the API container of the Docker stack, with \code{gpt-4.1-mini}, reworded the first ACCE question and passed validation with no fallback.
+\end{note}
