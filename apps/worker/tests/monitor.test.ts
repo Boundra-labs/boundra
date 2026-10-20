@@ -11,7 +11,7 @@ import {
 
 const addr = (n: number) => toHex(n, { size: 20 });
 const hash = (n: bigint) => toHex(n, { size: 32 });
-function fixture() {
+function fixture(head = 104n) {
   let cursor: MonitorCursor | null = null;
   let committed: RiskObservation[] = [];
   let rewound = false;
@@ -40,7 +40,7 @@ function fixture() {
   };
   const ranges: { fromBlock: bigint; toBlock: bigint }[] = [];
   const client = {
-    getBlockNumber: async () => 104n,
+    getBlockNumber: async () => head,
     getBlock: async ({ blockNumber }: { blockNumber: bigint }) => ({ hash: hash(blockNumber) }),
     getLogs: async (range: { fromBlock: bigint; toBlock: bigint }) => {
       ranges.push(range);
@@ -110,4 +110,17 @@ test('unknown source, removed log or reorg cannot commit observations', async ()
     assert.equal(f.cursor(), null);
     assert.equal(f.events().length, 0);
   }
+});
+
+test('a catch-up scan stays within the public Base Sepolia RPC log range', async () => {
+  const f = fixture(100_000n);
+  f.client.getLogs = async (range: { fromBlock: bigint; toBlock: bigint }) => {
+    f.ranges.push(range);
+    return [];
+  };
+  f.seedCursor({ nextBlock: 50_000n, previousBlockHash: hash(49_999n) });
+  assert.equal(await new RiskEventMonitor(f.reader, f.store).poll(), 'SCANNED');
+  const [range] = f.ranges;
+  assert.ok(range && range.toBlock - range.fromBlock + 1n <= 200n);
+  assert.equal(f.cursor()?.nextBlock, 50_180n);
 });

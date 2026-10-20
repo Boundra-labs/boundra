@@ -76,6 +76,7 @@ services:
       DATABASE_URL: *database-url
       WORKER_POLL_INTERVAL_MS: ${WORKER_POLL_INTERVAL_MS:-10000}
       RECEIPT_REORG_WINDOW_BLOCKS: ${RECEIPT_REORG_WINDOW_BLOCKS:-20}
+      MONITOR_BATCH_BLOCKS: ${MONITOR_BATCH_BLOCKS:-180}
       # Signing stays off unless every one of these is set (see docs/runbook.md, worker modes).
       EXECUTION_ENABLED: ${EXECUTION_ENABLED:-false}
       OPERATOR_PRIVATE_KEY: ${OPERATOR_PRIVATE_KEY:-}

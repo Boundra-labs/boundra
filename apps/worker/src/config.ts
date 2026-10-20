@@ -18,6 +18,8 @@ const schema = z.object({
   CHAIN_CONFIRMATIONS: z.coerce.number().int().min(1).max(100).default(5),
   // Keep terminal receipts under reconciliation for at least the PRD's 20-block overlap.
   RECEIPT_REORG_WINDOW_BLOCKS: z.coerce.number().int().min(20).max(10000).default(20),
+  // Risk-event scan size per poll; raise it only with an RPC that allows wider eth_getLogs ranges.
+  MONITOR_BATCH_BLOCKS: z.coerce.number().int().min(20).max(2000).default(180),
   // Signing is opt-in. The operator key is read only here and never logged.
   EXECUTION_ENABLED: z
     .enum(['true', 'false'])
