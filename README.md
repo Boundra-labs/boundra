@@ -4,9 +4,19 @@
 
 ## Status
 
-Implemented locally: Person 1's contracts, typed chain modules and deploy script; Person 2's SIWE sessions, REST API with OpenAPI, deterministic ACCE planner and mandate builder, PostgreSQL schema, durable execution/monitor stores, authorization verification, the bounded agent loop (deposit, risk exit, escalation, revocation) with crash recovery, an optional validated LLM wording provider and the B0–B3 benchmark runner. The full flow is proven end-to-end on a local anvil chain (`pnpm test:e2e:chain`).
+Built and tested: Person 1's contracts (deployed on Base Sepolia, reviewed manifest in `deploy/manifests/base-sepolia.json`), typed chain modules and deploy script; Person 2's SIWE sessions and API tokens, REST API with OpenAPI, deterministic ACCE planner and mandate builder, PostgreSQL schema, durable execution and monitor stores, the bounded agent loop (deposit, risk exit, escalation, revocation) with crash recovery, validated LLM wording (OpenAI or Anthropic) and the B0–B3 benchmark runner; Person 3's owner web app, browser end-to-end suites, the SDK and MCP server, and the deployable stack (Docker Compose with Caddy, or Render).
 
-Still open: the frontend mandate/funding UI (Person 3), public Base Sepolia deployment and receipts (Person 1), a real LLM provider run (needs a runtime key), Person 3's frozen 50-persona benchmark fixture, and the hosting/backup/monitoring release gates. No deployment addresses, transaction hashes, benchmark results or performance claims are invented. See [Person 1 progress](./docs/person-1-progress.md), [Person 2 progress](./docs/person-2-progress.md), [API](./docs/api.md), [ACCE](./docs/acce.md) and [data model](./docs/data-model.md).
+The full flow is proven end to end on a local anvil chain (`pnpm test:e2e:chain`, `pnpm test:e2e:real`), and the stack runs against the Base Sepolia deployment. Still open: the frozen 50-persona benchmark run, monitoring and alerts, and an independent security review. No addresses, transaction hashes, benchmark results or performance claims are invented.
+
+| Document                                                                       | Where                                                                                                    |
+| ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| Technical documentation (architecture, core algorithm, security design)        | [docs/technical/boundra-technical.pdf](./docs/technical/boundra-technical.pdf)                           |
+| Contract security self-assessment                                              | [docs/security.md](./docs/security.md)                                                                   |
+| Execution evidence (real Base Sepolia transactions, including the agent's own) | [docs/execution-evidence.md](./docs/execution-evidence.md)                                               |
+| Deployment instructions                                                        | [docs/runbook.md](./docs/runbook.md), [docs/deploy-render.md](./docs/deploy-render.md)                   |
+| API, ACCE, data model                                                          | [docs/api.md](./docs/api.md), [docs/acce.md](./docs/acce.md), [docs/data-model.md](./docs/data-model.md) |
+| SDK and MCP server                                                             | [docs/roadmap-sdk-mcp.md](./docs/roadmap-sdk-mcp.md)                                                     |
+| Tests                                                                          | [Checks](#checks) below: unit, integration, contract, chain end-to-end and browser suites                |
 
 ## Requirements
 
