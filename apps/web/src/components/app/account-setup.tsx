@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { formatEther, type Address } from 'viem';
 import { api, isApiError } from '@/lib/api';
 import { formatMockUsdc } from '@/lib/amount';
@@ -97,9 +97,30 @@ export function AccountSetup({
     }
   }, [executor.onchain, executor.registered, register]);
 
-  if (!contracts) return null;
   const hasGas = gas !== undefined && gas > 0n;
   const hasUsdc = usdc.total !== undefined && usdc.total > 0n;
+  // A public RPC endpoint can answer from a node a block or two behind the receipt, so keep
+  // re-reading until the confirmed step shows, for at most a minute, with its button disabled.
+  const [awaiting, setAwaiting] = useState<'usdc' | 'executor' | null>(null);
+  const reread = useRef(readiness.refresh);
+  reread.current = readiness.refresh;
+  const shown =
+    awaiting === 'usdc' ? hasUsdc : awaiting === 'executor' ? Boolean(executor.onchain) : true;
+  useEffect(() => {
+    if (awaiting === null) return;
+    if (shown) {
+      setAwaiting(null);
+      return;
+    }
+    const timer = setInterval(() => void reread.current(), 2000);
+    const stop = setTimeout(() => setAwaiting(null), 60_000);
+    return () => {
+      clearInterval(timer);
+      clearTimeout(stop);
+    };
+  }, [awaiting, shown]);
+
+  if (!contracts) return null;
   const now = BigInt(Math.floor(Date.now() / 1000));
   const coolingDown = claim.nextAt !== undefined && claim.nextAt > now;
 
@@ -109,7 +130,9 @@ export function AccountSetup({
       abi: faucetAbi,
       functionName: 'claim',
     });
-    if (result.phase === 'confirmed') await readiness.refresh();
+    if (result.phase !== 'confirmed') return;
+    setAwaiting('usdc');
+    await readiness.refresh();
   }
 
   async function createExecutor() {
@@ -118,6 +141,7 @@ export function AccountSetup({
       abi: factoryAbi,
       functionName: 'createExecutor',
     });
+    if (result.phase === 'confirmed') setAwaiting('executor');
     if (result.phase === 'confirmed' || result.phase === 'failed') await readiness.refresh();
   }
 
@@ -163,7 +187,7 @@ export function AccountSetup({
           {!hasUsdc && !coolingDown && (
             <button
               className="button"
-              disabled={!hasGas || isBusy(faucet.state)}
+              disabled={!hasGas || isBusy(faucet.state) || awaiting === 'usdc'}
               onClick={() => void claimUsdc()}
             >
               Claim {claim.amount ? formatMockUsdc(claim.amount) : 'MockUSDC'}
@@ -194,7 +218,7 @@ export function AccountSetup({
           {!executor.onchain && (
             <button
               className="button"
-              disabled={!hasGas || isBusy(factory.state)}
+              disabled={!hasGas || isBusy(factory.state) || awaiting === 'executor'}
               onClick={() => void createExecutor()}
             >
               Create executor
