@@ -1,52 +1,60 @@
-# Deploying on Render
+# Deploying on Render (free plan)
 
-`render.yaml` (a Render Blueprint) creates the whole stack in one region (Singapore):
+`render.yaml` (a Render Blueprint) deploys Boundra on Render's free plan, in Singapore:
 
-| Service          | Render type                 | Image (`BOUNDRA_SERVICE`) | Notes                                                                         |
-| ---------------- | --------------------------- | ------------------------- | ----------------------------------------------------------------------------- |
-| `boundra-web`    | Web service (public, HTTPS) | `web`                     | The only public service. Forwards `/api/v1/*` to the API.                     |
-| `boundra-api`    | Private service             | `migrate`                 | Reachable only on Render's private network. Applies migrations pre-deploy.    |
-| `boundra-worker` | Background worker           | `worker`                  | Monitors the chain and acts as Boundra's agent within confirmed mandates.     |
-| `boundra-db`     | PostgreSQL 17               |                           | Managed, with Render's backups. Replaces the Compose `postgres` and `backup`. |
+| Render resource       | Plan               | What runs there                                                                                            |
+| --------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------- |
+| `boundra` web service | Free               | The web app, the API and the worker in one container ([`deploy/render-free.sh`](../deploy/render-free.sh)) |
+| `boundra-db`          | Free PostgreSQL 17 | The database                                                                                               |
 
-Render builds only the last stage of a Dockerfile, so the Dockerfile ends with a stage chosen by the `BOUNDRA_SERVICE` build argument (Render passes each service's environment variables to the build). The reviewed manifests are built into the images at `/config/manifests`, the path Compose mounts them at. Caddy is not used: Render terminates HTTPS.
+Render has no free plan for background workers or private services, so one free web service runs all three processes. Only the web app listens publicly, on Render's `PORT`; the API listens on `127.0.0.1:3001` inside the container and the web app forwards `/api/v1/*` to it. Migrations run each time the container starts (already-applied ones are skipped). If any of the three processes exits, the container exits and Render restarts it. Caddy is not used: Render terminates HTTPS.
 
-Every service uses Render's smallest paid instance by default. A background worker has no free plan, and a free web service sleeps when idle, so the first visit after a pause is slow. Check Render's current pricing before creating it.
+The Dockerfile's last stage is chosen by the `BOUNDRA_SERVICE` build argument (Render passes each service's environment variables to the build); `all` is the all-in-one image. The reviewed manifests are built into the image at `/config/manifests`.
+
+## Free-plan limits
+
+Check Render's current free-plan terms; at the time of writing:
+
+- **The service sleeps after about 15 minutes without visitors, and the agent sleeps with it:** no deposits, withdrawals or risk monitoring until the next visit wakes it, which takes about a minute. Open the site yourself before a demo or judging.
+- **Free instance hours are limited per workspace and month.** One service awake all month uses almost all of them; keep other free services out of the same workspace.
+- **The free database expires** after Render's free period. Fine for a hackathon, not for keeping data.
+- **Little CPU and 512 MB of memory**, shared by the three processes (they use about 400 MB). Heap caps in `deploy/render-free.sh` keep them inside it.
+
+**To remove these limits** without other changes, switch the `boundra` service and `boundra-db` to paid plans in the dashboard: the service then stays awake and the database is kept.
 
 ## Before you start
 
-1. The commit to deploy is on `main` and its CI run is green. Services deploy automatically after CI passes on `main` (`autoDeployTrigger: checksPass`).
+1. The commit to deploy is on `main` and its CI run is green. The service deploys automatically after CI passes on `main` (`autoDeployTrigger: checksPass`).
 2. Have these values ready. They are entered in Render's dashboard only, never committed:
 
-| Service | Variable                 | Value                                                                                |
-| ------- | ------------------------ | ------------------------------------------------------------------------------------ |
-| API     | `WEB_ORIGIN`             | The web app's address, e.g. `https://boundra-web.onrender.com` (see step 4 below)    |
-| API     | `OPERATOR_ADDRESS`       | Boundra's agent wallet: the public address only                                      |
-| API     | `ADMIN_ADDRESSES`        | The risk admin wallet, lowercase (`0xa05f8266b63d8074acba1c8f4e7355e7f515f14b`)      |
-| API     | `LLM_API_KEY`            | An OpenAI API key (`LLM_PROVIDER=openai`, `LLM_MODEL=gpt-4.1-mini` are in the file)  |
-| Worker  | `OPERATOR_PRIVATE_KEY`   | The agent wallet's key. Never the owner's, deployer's or risk admin's                |
-| Worker  | `ATTEMPT_ENCRYPTION_KEY` | 64 hex characters (`node scripts/setup.mjs --deploy` generates one in `deploy/.env`) |
+| Variable                 | Value                                                                                |
+| ------------------------ | ------------------------------------------------------------------------------------ |
+| `WEB_ORIGIN`             | The service's address, e.g. `https://boundra.onrender.com` (see step 4 below)        |
+| `OPERATOR_ADDRESS`       | Boundra's agent wallet: the public address only                                      |
+| `ADMIN_ADDRESSES`        | The risk admin wallet, lowercase (`0xa05f8266b63d8074acba1c8f4e7355e7f515f14b`)      |
+| `LLM_API_KEY`            | An OpenAI API key (`LLM_PROVIDER=openai`, `LLM_MODEL=gpt-4.1-mini` are in the file)  |
+| `OPERATOR_PRIVATE_KEY`   | The agent wallet's key. Never the owner's, deployer's or risk admin's                |
+| `ATTEMPT_ENCRYPTION_KEY` | 64 hex characters (`node scripts/setup.mjs --deploy` generates one in `deploy/.env`) |
 
 `SESSION_SECRET` is generated by Render. The agent wallet needs a little Base Sepolia ETH for gas.
 
-## Create the stack
+## Create it
 
 1. In the Render dashboard: **New → Blueprint**, connect the GitHub repository and choose the `main` branch. Render reads `render.yaml`.
-2. Enter the values above when Render asks for them, then create the Blueprint. Render creates the database first, then builds and deploys the three services. The first build takes several minutes.
-3. The API's pre-deploy command (`pnpm db:migrate`) migrates the empty database. The worker may restart once if it starts before the migration has finished.
-4. Open the web service and check its address. If Render added a suffix to `boundra-web.onrender.com`, set the API's `WEB_ORIGIN` to the real address and redeploy the API: sign-in messages and the Origin check depend on it.
+2. Enter the values above when Render asks for them, then create the Blueprint. Render creates the database, then builds and deploys the service. The first build takes several minutes.
+3. Wait for the deploy to turn **Live**. Render only switches traffic once `/status` reports the API, the database and the worker as ready.
+4. Check the service's address. If Render added a suffix to `boundra.onrender.com`, set `WEB_ORIGIN` to the real address and redeploy: sign-in messages and the Origin check depend on it.
 
 ## Check the deployment
 
-- `https://<web address>/status` reports `"status": "ok"` and `"worker": "execute"`. `monitor_only` means a worker setting is missing or rejected; the worker's logs name which (never its value).
-- `https://<web address>/api/v1/health/ready` reports `"database": "connected"`.
-- The worker's logs show `Worker mode: execute` and no repeated `MONITOR_POLL failed`.
-- On first start the risk monitor scans from the deployment block, 180 blocks per 10-second poll: about 40 minutes of catch-up, once. Risk events set in that time are noticed when it catches up. Deposits and withdrawals are not affected.
+- `https://<address>/status` reports `"status": "ok"` and `"worker": "execute"`. `monitor_only` means a worker setting is missing or rejected; the logs name which (never its value).
+- The logs show `Worker mode: execute` and no repeated `MONITOR_POLL failed`.
+- On first start the risk monitor scans from the deployment block, 180 blocks per 10-second poll: about 40 minutes of catch-up, once, while the service stays awake. Risk events set in that time are noticed when it catches up. Deposits and withdrawals are not affected.
 
 ## Custom domain
 
-Add the domain in the web service's **Settings → Custom Domains** and create the DNS record Render shows. Then set the API's `WEB_ORIGIN` to `https://<your domain>` and redeploy the API.
+Add the domain in the service's **Settings → Custom Domains** and create the DNS record Render shows. Then set `WEB_ORIGIN` to `https://<your domain>` and redeploy.
 
 ## Updates and rollback
 
-Merging to `main` deploys all three services once CI passes; migrations run before the new API starts. To roll back, use **Rollback** on a service's deploy history. Migrations only move forward (see [runbook](./runbook.md)): if the release you leave added one, restore a database backup taken before the upgrade rather than only rolling back the services.
+Merging to `main` deploys once CI passes; migrations run before the new API starts. To roll back, use **Rollback** in the deploy history. Migrations only move forward (see [runbook](./runbook.md)): if the release you leave added one, restore a database backup taken before the upgrade rather than only rolling back.

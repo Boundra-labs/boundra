@@ -1,5 +1,5 @@
 # Hosts that build only the last stage (Render) choose the image with this build argument:
-# web, api, worker or migrate. Compose and the release workflow pick a target instead.
+# web, api, worker, migrate or all. Compose and the release workflow pick a target instead.
 ARG BOUNDRA_SERVICE=web
 
 FROM node:22.22.0-bookworm-slim AS base
@@ -70,5 +70,16 @@ COPY --from=build --chown=node:node /app/apps/web/.next/static /app/apps/web/.ne
 USER node
 EXPOSE 3000
 CMD ["node", "apps/web/server.js"]
+
+# API, worker and web app in one container, for a single free host (deploy/render-free.sh).
+FROM migrate AS all
+USER root
+RUN cp -r apps/web/.next/static apps/web/.next/standalone/apps/web/.next/static
+USER node
+# Release identifier (e.g. git describe); set last so changing it never invalidates the build.
+ARG RELEASE=dev
+ENV BOUNDRA_RELEASE=$RELEASE
+ENV NODE_ENV=production
+CMD ["bash", "deploy/render-free.sh"]
 
 FROM ${BOUNDRA_SERVICE} AS selected
