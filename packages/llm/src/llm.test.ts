@@ -10,10 +10,12 @@ import {
   AnthropicProvider,
   createProvider,
   DisabledProvider,
+  OpenAiProvider,
   readLlmConfig,
   summarizeMandate,
   TokenBudget,
   wordQuestion,
+  type ChatCompletionsClient,
   type MessagesClient,
 } from './index';
 
@@ -182,5 +184,136 @@ describe('mandate summary', () => {
       }),
     );
     expect((await summarizeMandate(provider(good.client), result.preview)).source).toBe('LLM');
+  });
+});
+
+describe('openai provider', () => {
+  const openAiUsage = { prompt_tokens: 120, completion_tokens: 40, total_tokens: 160 };
+
+  function fakeOpenAi(response: unknown | (() => unknown)) {
+    const calls: { params: Record<string, unknown>; options: Record<string, unknown> }[] = [];
+    const client = {
+      chat: {
+        completions: {
+          create: async (params: Record<string, unknown>, options: Record<string, unknown>) => {
+            calls.push({ params, options });
+            return typeof response === 'function' ? (response as () => unknown)() : response;
+          },
+        },
+      },
+    } as unknown as ChatCompletionsClient;
+    return { client, calls };
+  }
+
+  const openAi = (
+    client: ChatCompletionsClient,
+    model = 'gpt-4.1-mini',
+    budget = new TokenBudget(100_000),
+  ) => new OpenAiProvider({ client, model, deadlineMs: 20_000, maxOutputTokens: 4_000, budget });
+
+  const completion = (
+    content: string | null,
+    finish_reason = 'stop',
+    refusal: string | null = null,
+  ) => ({
+    model: 'gpt-4.1-mini-2025-04-14',
+    choices: [{ index: 0, finish_reason, message: { role: 'assistant', content, refusal } }],
+    usage: openAiUsage,
+  });
+
+  const wording = { text: question.text, alternatives: question.alternatives };
+
+  it('uses validated model wording and sends a bounded, strict structured-output request', async () => {
+    const parsed = {
+      text: 'Would a 30-day lockup be okay in exchange for a higher illustrative yield?',
+      alternatives: question.alternatives,
+    };
+    const { client, calls } = fakeOpenAi(completion(JSON.stringify(parsed)));
+    const result = await wordQuestion(openAi(client), question);
+    expect(result).toMatchObject({ source: 'LLM', fallbackReason: null, value: parsed });
+    expect(result.usage).toEqual({ inputTokens: 120, outputTokens: 40 });
+    const [{ params, options }] = calls;
+    expect(params).toMatchObject({
+      model: 'gpt-4.1-mini',
+      max_completion_tokens: 4_000,
+      response_format: { type: 'json_schema', json_schema: { strict: true } },
+    });
+    expect(params.reasoning_effort).toBeUndefined();
+    expect(options).toMatchObject({ maxRetries: 2, timeout: 10_000 });
+    expect(options.signal).toBeInstanceOf(AbortSignal);
+    const messages = params.messages as { role: string; content: string }[];
+    expect(messages.map((message) => message.role)).toEqual(['system', 'user']);
+    // The model only sees the template question and its alternatives.
+    expect(JSON.parse(messages[1]!.content)).toEqual({
+      question: question.text,
+      alternatives: question.alternatives,
+    });
+  });
+
+  it('asks reasoning models for low effort', async () => {
+    for (const model of ['gpt-5-mini', 'o4-mini']) {
+      const { client, calls } = fakeOpenAi(completion(JSON.stringify(wording)));
+      await wordQuestion(openAi(client, model), question);
+      expect(calls[0]!.params.reasoning_effort).toBe('low');
+    }
+  });
+
+  it.each([
+    ['refusal', completion(null, 'stop', 'I cannot help with that.'), 'REFUSAL'],
+    ['content filter', completion(null, 'content_filter'), 'REFUSAL'],
+    ['truncated', completion('{"text":"x"', 'length'), 'INVALID_OUTPUT'],
+    ['not JSON', completion('Sure! Here is the question.'), 'INVALID_OUTPUT'],
+    ['malformed', completion(JSON.stringify({ text: 1 })), 'INVALID_OUTPUT'],
+    [
+      'injected fact',
+      completion(
+        JSON.stringify({
+          text: 'Lock for 90 days at MegaVault for more?',
+          alternatives: question.alternatives,
+        }),
+      ),
+      'NEW_NUMBER',
+    ],
+  ])('falls back to the template on %s', async (_label, response, reason) => {
+    const { client } = fakeOpenAi(response);
+    const result = await wordQuestion(openAi(client), question);
+    expect(result).toMatchObject({ source: 'TEMPLATE', fallbackReason: reason });
+    expect(result.value).toEqual(wording);
+  });
+
+  it('treats timeouts and provider errors as fallbacks', async () => {
+    const timeout = fakeOpenAi(() => {
+      throw Object.assign(new Error('aborted'), { name: 'TimeoutError' });
+    });
+    expect((await wordQuestion(openAi(timeout.client), question)).fallbackReason).toBe('TIMEOUT');
+    const broken = fakeOpenAi(() => {
+      throw new Error('500');
+    });
+    expect((await wordQuestion(openAi(broken.client), question)).fallbackReason).toBe(
+      'PROVIDER_ERROR',
+    );
+  });
+
+  it('stops calling the provider once the token budget is spent', async () => {
+    const budget = new TokenBudget(4_100, 60_000, () => 0);
+    const { client, calls } = fakeOpenAi(completion(JSON.stringify(wording)));
+    const p = openAi(client, 'gpt-4.1-mini', budget);
+    await wordQuestion(p, question);
+    expect((await wordQuestion(p, question)).fallbackReason).toBe('BUDGET_EXHAUSTED');
+    expect(calls).toHaveLength(1);
+  });
+
+  it('requires a key and an explicit model', () => {
+    expect(() => readLlmConfig({ LLM_PROVIDER: 'openai', LLM_MODEL: 'gpt-4.1-mini' })).toThrow(
+      /LLM_API_KEY is required for the openai provider/,
+    );
+    expect(() => readLlmConfig({ LLM_PROVIDER: 'openai', LLM_API_KEY: 'test' })).toThrow(
+      /LLM_MODEL is required/,
+    );
+    const created = createProvider(
+      readLlmConfig({ LLM_PROVIDER: 'openai', LLM_API_KEY: 'test', LLM_MODEL: 'gpt-4.1-mini' }),
+    );
+    expect(created).toBeInstanceOf(OpenAiProvider);
+    expect(created).toMatchObject({ name: 'openai', model: 'gpt-4.1-mini' });
   });
 });
