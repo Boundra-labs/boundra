@@ -95,7 +95,7 @@ Within the mandate, a compromised operator can still act at inconvenient times o
 
 \section{The Base Sepolia deployment}
 
-Person 1 deployed the contracts with \code{contracts/script/DeployBoundra.s.sol} at block 48,322,785. Before it was pinned in \code{deploy/manifests/base-sepolia.json}, every role was read back from the contracts themselves and every contract's deployed bytecode was compared with the repository's compiled code. Because anyone can deploy look-alike contracts, the API and worker trust only this manifest: they check the chain, the addresses and the keccak256 hash of each contract's runtime code before acting.
+The contracts were deployed with \code{contracts/script/DeployBoundra.s.sol} at block 48,322,785. Before it was pinned in \code{deploy/manifests/base-sepolia.json}, every role was read back from the contracts themselves and every contract's deployed bytecode was compared with the repository's compiled code. Because anyone can deploy look-alike contracts, the API and worker trust only this manifest: they check the chain, the addresses and the keccak256 hash of each contract's runtime code before acting.
 
 \begin{stable}{@{}P{2.9cm}L@{}}
 \headrow \thead{Contract} & \thead{Address}\\ \midrule
