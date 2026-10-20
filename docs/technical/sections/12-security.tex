@@ -1,0 +1,52 @@
+\chapter{Security model}\label{ch:security}
+
+This chapter collects the security properties from the rest of the document in one place. It is a self-assessment for a controlled testnet prototype, not an independent audit or an approval for real funds.
+
+\section{Trust boundaries}
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+  \node[boxlime,text width=3.6cm,minimum height=2.2cm] (owner) at (0,0) {\textbf{Owner}\\[2pt]\scriptsize the only one who can change authority, fund, pause, revoke or recover};
+  \node[boxgreen,text width=3.6cm,minimum height=2.2cm] (exec) at (5.7,0) {\textbf{Executor contract}\\[2pt]\scriptsize enforces every limit; pays only the owner};
+  \node[boxdark,text width=3.6cm,minimum height=2.2cm] (agent) at (11.4,0) {\textbf{Operator (agent)}\\[2pt]\scriptsize typed deposit and withdraw only, within the mandate};
+  \node[boxsage,text width=3.6cm,minimum height=1.8cm] (backend) at (11.4,-3.0) {\textbf{Backend}\\[2pt]\scriptsize no owner keys; checks early, explains, records};
+  \node[boxamber,text width=3.6cm,minimum height=1.8cm] (risk) at (5.7,-3.0) {\textbf{Risk admin}\\[2pt]\scriptsize sets vault risk and capacity; cannot move positions};
+  \node[boxghost,text width=3.6cm,minimum height=1.8cm] (llm) at (0,-3.0) {\textbf{Language model}\\[2pt]\scriptsize wording only, validated, template fallback};
+  \draw[arr] (owner) -- node[lbl,above=2pt]{signs} (exec);
+  \draw[arr] (agent) -- node[lbl,above=2pt]{calls} (exec);
+  \draw[arrm] (risk) -- node[lbl,right=2pt]{vault state} (exec);
+\end{tikzpicture}
+\caption{Each role has one job and no way to take over another's.}
+\end{figure}
+
+\section{Threats and mitigations}
+
+\begin{btable}{@{}P{4.6cm}L@{}}
+\headrow \thead{Threat} & \thead{Mitigation}\\ \midrule\endhead
+Agent key stolen & The attacker can only make calls the mandate allows: capped, one allocation, allowed vaults, withdrawals to the owner. The owner pauses or revokes, recovers funds, and authorizes a new agent with a fresh mandate after settlement.\\
+Agent's model or policy is wrong & Same bound as a stolen key. The policy is deterministic and tested, and \code{prepareAction} plus simulation refuse actions outside the mandate before sending.\\
+Server compromised & No owner keys are on the server. The agent key is bounded as above. Secrets are runtime settings only, never in git or images.\\
+Fake contracts or events & The backend trusts one reviewed manifest and checks runtime bytecode hashes, chain, asset and factory relationships. Risk events are accepted only from the two pinned vaults.\\
+Replay or stale actions & Fresh action ID, current nonce and mandate version, and an exclusive deadline are checked on chain. Reverts consume neither nonce nor ID.\\
+Owner approves something other than shown & Approval must present the \code{previewHash} of the exact preview; the worker authorizes only when the on-chain tuple matches that revision field by field.\\
+Cross-site requests & First-party \code{\_\_Host-} cookie with SameSite=Strict, exact \code{Origin} check and CSRF token on every state change; bearer tokens are never sent by browsers on their own.\\
+Duplicate or lost transactions & Persist-before-broadcast, fenced leases, idempotent nonce reservations, identical-byte recovery and a 20-block reorg window.\\
+Language model misleads & It cannot change questions, options, limits or approvals; outputs adding facts are rejected and the template is used.\\
+\end{btable}
+
+\section{Contract evidence}
+
+Foundry unit, fuzz and stateful invariant tests (\code{pnpm contracts:test}) cover owner-only changes, exact principal and decimals, the supply cap, lockup, bounded capacity, beneficiary routing, pause, revoke and expiry recovery, mandate replacement, per-action and cumulative budgets, target and action masks, wrong chain, version, nonce and deadline, replay, arbitrary-call denial and partial allocation and exit. The invariant tests run randomized sequences of deposits, withdrawals, pauses and recoveries and assert budget bounds, at most one allocation, owner-only proceeds, principal conservation, vault backing and zero leftover allowance.
+
+\begin{caution}[Limits of this evidence]
+Tests show the presence of the intended behaviour, not the absence of all bugs. An independent security review is still recommended before any wider use, and an audit before any real funds.
+\end{caution}
+
+\section{Operational rules}
+
+\begin{itemize}
+  \item Operator, deployer and risk admin are separate accounts. The worker refuses to run in \code{execute} mode if the operator equals the risk admin.
+  \item Secrets (session secret, agent key, attempt encryption key, LLM key, database password) are runtime settings; \code{deploy/.env} is gitignored and excluded from Docker builds.
+  \item Execution stays disabled until a trusted manifest, a funded operator, explicit gas and fee caps and the durable store are all in place.
+\end{itemize}

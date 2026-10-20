@@ -1,0 +1,56 @@
+\chapter{SDK and MCP server}\label{ch:sdk}
+
+Because the limits live in the owner's executor contract, the agent does not have to be Boundra's. Any program can be the operator and stay inside the same boundaries. Two packages make that practical: \code{@boundra/sdk} for developers and an MCP server for AI assistants such as Claude.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+  \node[boxlime,text width=3.0cm] (owner) at (0,0) {\textbf{Owner}\\\scriptsize approves in the app, signs in own wallet};
+  \node[boxsage,text width=3.4cm] (client) at (5.4,0) {\textbf{Owner tools}\\\scriptsize \code{BoundraClient}, MCP owner tools};
+  \node[box,text width=2.6cm] (api) at (11.6,0) {\textbf{Boundra API}};
+  \node[boxdark,text width=3.4cm] (op) at (5.4,-3.0) {\textbf{Owner's own agent}\\\scriptsize \code{BoundraOperator}, MCP operator tools};
+  \node[boxgreen,text width=2.6cm] (exec) at (11.6,-3.0) {\textbf{Executor}\\\scriptsize enforces the mandate};
+  \draw[arr] (owner) -- node[lbl,above=2pt]{API token} (client);
+  \draw[arr] (client) -- node[lbl,above=2pt]{read, draft, prepare} (api);
+  \draw[arrd] (client.south west) to[out=-150,in=-30] node[lbl,below=2pt,pos=0.5]{unsigned owner transactions} (owner.south east);
+  \draw[arr] (op) -- node[lbl,above=2pt]{agent's own key} (exec);
+\end{tikzpicture}
+\caption{Owner tools never sign. The operator side signs only with the agent's own key, and the contract bounds it.}
+\end{figure}
+
+\section{\code{@boundra/sdk}}
+
+\begin{stable}{@{}P{4.4cm}L@{}}
+\headrow \thead{Export} & \thead{What it does}\\ \midrule
+\code{BoundraClient} & The owner's API client: sign in with an API token, start a goal, answer questions, draft (optionally for the owner's own agent), approve, read the dashboard and activity.\\
+\code{ownerAuthorizationCalls}, \code{ownerActionCall}, \code{faucetClaimCall}, \code{createExecutorCall} & Build \emph{unsigned} transactions for the owner's wallet to sign.\\
+\code{BoundraOperator} & The agent side, with the agent's own key: reads the confirmed mandate, explains what it may do per vault and why not, prepares the action with the same chain guard as the worker, simulates, then sends.\\
+\code{mockUsdc()} & Exact amount helper (6 decimals).\\
+\end{stable}
+
+An operator refusal has a stable code and a recovery hint (for example \code{WRONG\_OPERATOR} when another agent's key is used), and it happens before anything is sent. The contract would reject it anyway.
+
+\section{MCP server}
+
+The MCP server (\code{apps/mcp}, stdio) gives AI assistants ten tools. Owner tools need an API token; operator tools need the agent's own key. Without either it offers only an overview with setup guidance.
+
+\begin{btable}{@{}P{5.4cm}P{2.1cm}L@{}}
+\headrow \thead{Tool} & \thead{Needs} & \thead{What it does}\\ \midrule\endhead
+\code{boundra\_get\_overview} & owner token & Executor, mandate, funds, positions, chain status.\\
+\code{boundra\_list\_activity} & owner token & Timeline, with transaction links only for real transactions.\\
+\code{boundra\_get\_mandate} & owner token & The exact limits in force and the notices the owner sees.\\
+\code{boundra\_start\_goal} & owner token & Starts a goal and returns the first clarifying question.\\
+\code{boundra\_answer\_question} & owner token & Records the owner's answer (``unsure'' always allowed).\\
+\code{boundra\_draft\_mandate} & owner token & Drafts or revises a mandate; the owner approves in the app.\\
+\code{boundra\_prepare\_owner\_action} & owner token & Pause, resume, revoke, recover, withdraw as an \emph{unsigned} transaction.\\
+\code{boundra\_operator\_status} & agent key & What a mandate lets this agent do now, and why not.\\
+\code{boundra\_deposit}, \code{boundra\_withdraw} & agent key & Act within the mandate with the agent's own key.\\
+\end{btable}
+
+\begin{principle}{Rules that do not bend}
+No tool approves a mandate or signs for the owner. The operator key is the agent's, never the owner's, deployer's or risk admin's. A stolen agent key is still bounded by the mandate, and the owner can pause or revoke at any time.
+\end{principle}
+
+\begin{note}[Verified end to end]
+A full-stack run on a local chain drove the whole journey through the SDK and MCP server: token sign-in, a mandate for the owner's own agent, the worker standing aside, the agent's deposit, another agent's key refused, a withdrawal paid to the owner, and a revoked token rejected.
+\end{note}

@@ -1,0 +1,34 @@
+\chapter{Data model}\label{ch:data}
+
+PostgreSQL 17 through Prisma 7 (\code{packages/database/prisma/schema.prisma}). Migrations are applied as a release step (\code{pnpm db:migrate}) and never reset at start-up.
+
+\begin{keypoint}[Exact numbers only]
+Token amounts and block numbers are stored as \code{NUMERIC(78,0)}, exact to the full uint256 range; on the wire they are base-unit strings (MockUSDC has 6 decimals), never floating-point numbers. Addresses are stored lowercase and hashes as lowercase \code{0x} hex.
+\end{keypoint}
+
+\section{Tables}
+
+\begin{stable}{@{}P{2.2cm}P{4.3cm}L@{}}
+\headrow \thead{Area} & \thead{Tables} & \thead{Purpose and key constraints}\\ \midrule
+Identity & \code{WalletIdentity}, \code{AuthChallenge}, \code{AuthSession} & One row per owner address; single-use SIWE nonces (stored as hashes); sessions and API tokens (\code{kind} \code{COOKIE} or \code{TOKEN}), stored only as hashes.\\
+Clarification & \code{Intent}, \code{Question}, \code{PreferenceRecord} & The goal and exact amount with an optimistic \code{version}; up to five ordered questions with their scores; versioned answers for audit.\\
+Mandates & \code{Executor}, \code{Mandate} & One verified executor per owner; one row per draft revision with the exact tuple, preview, \code{previewHash}, \code{mandateHash} and status. At most one \code{AUTHORIZED} per executor.\\
+Agent & \code{Decision}, \code{ActionProposal}, \code{PolicyCheck} & Every decision with its reason and snapshot; deterministic action IDs; at most one open action per executor.\\
+Chain ports & \code{Lease}, \code{EoaNonceReservation}, \code{TransactionAttempt}, \code{AttemptEvent}, \code{MonitorCursor}, \code{RiskEvent} & Fenced leases; idempotent nonce reservations; encrypted signed attempts with append-only history; the monitor cursor and canonical or orphaned risk events.\\
+Operations & \code{Job}, \code{WorkerHeartbeat}, \code{ActivityEvent} & The queue; worker liveness and mode; the owner's append-only timeline.\\
+Evaluation & \code{EvaluationRun}, \code{EvaluationCaseResult} & Benchmark runs with versions and per-persona results.\\
+\end{stable}
+
+\section{Concurrency rules}
+
+\begin{itemize}
+  \item Workflow changes and their follow-up jobs commit in one transaction; job keys make enqueueing idempotent.
+  \item Jobs are claimed with \code{FOR UPDATE SKIP LOCKED} and a lease; a crashed worker's job is reclaimed.
+  \item Signer and monitor work hold a row lease across RPC calls (never a database transaction); every write locks the lease row and checks its fencing token.
+  \item Answers use optimistic concurrency on \code{Intent.version}; approvals compare-and-set on status and preview hash.
+  \item Partial unique indexes enforce the invariants that matter most: one authorized mandate per executor, one open action per executor, one live attempt per executor action nonce.
+\end{itemize}
+
+\begin{note}[The database is not the source of truth]
+PostgreSQL holds workflow and history. Authority, funding, positions and receipts are always re-read from the chain before the worker acts.
+\end{note}

@@ -1,0 +1,102 @@
+\chapter{The agent: worker}\label{ch:worker}
+
+The worker is Boundra's agent. It runs on its own, watches the chain, decides what to do for each authorized mandate, and carries out bounded operator transactions with the agent's own key. It is built so that a crash, a slow RPC node or a chain reorganisation can never make it act twice, act on stale state or lose track of a transaction it signed.
+
+\section{Three modes}
+
+At start-up \code{runtime/activation.ts} decides how much the worker is allowed to do. It only ever moves up a mode when every check passes.
+
+\begin{stable}{@{}P{2.4cm}P{6.6cm}L@{}}
+\headrow \thead{Mode} & \thead{When} & \thead{Behaviour}\\ \midrule
+\code{observe\_only} & No deployment manifest, or activation failed (RPC down, bytecode does not match the pinned hashes). & Heartbeat only; activation is retried periodically.\\
+\code{monitor\_only} & Manifest verified, but signing is not fully configured (\code{EXECUTION\_ENABLED}, operator key, \code{ATTEMPT\_ENCRYPTION\_KEY}, gas caps), or the operator equals the risk admin. & Verifies authorizations, monitors risk, records decisions. Never signs.\\
+\code{execute} & All of the above are present. & Also proposes, signs and reconciles operator actions.\\
+\end{stable}
+
+The mode is written into the worker's heartbeat, and the API's readiness endpoint reports it (\code{executionEnabled} is true only in \code{execute}).
+
+\section{How work is scheduled}
+
+All work goes through a durable job queue in PostgreSQL (\code{Job} table). Every poll interval (10 s by default) the scheduler enqueues idempotent jobs: a risk-monitor poll, an evaluation for every authorized mandate, an authorization check for every approved one, and receipt reconciliation for open actions. Job keys contain a time bucket, so two workers enqueueing the same tick create one job.
+
+\begin{itemize}
+  \item Jobs are claimed with \code{FOR UPDATE SKIP LOCKED} and a lease. If a worker crashes, its job is reclaimed after the lease expires, and the old owner can no longer complete it.
+  \item A workflow change and the jobs it triggers commit in the same database transaction, so no follow-up work is lost between them.
+\end{itemize}
+
+\section{Deciding what to do}
+
+For each authorized mandate the orchestrator takes a fresh snapshot of confirmed chain state and applies a deterministic policy (\code{orchestration/decision.ts}):
+
+\begin{btable}{@{}P{7.4cm}L@{}}
+\headrow \thead{Situation} & \thead{Decision}\\ \midrule\endhead
+Mandate paused & \code{HOLD}\\
+Position held, vault \code{NORMAL} & \code{HOLD} (monitoring)\\
+Position held, vault \code{DEGRADED}, unlocked, capacity left, withdrawal allowed & \code{WITHDRAW} \(\min(\text{principal}, \text{capacity}, \text{per-action cap})\) to the owner\\
+Position held, \code{DEGRADED}, but locked, no capacity or withdrawal not allowed & \code{ESCALATE} to the owner\\
+Allocation already completed (also after an exit) & \code{HOLD}: never re-deposit\\
+Vault \code{DEGRADED}, no position & \code{HOLD}: no new deposit\\
+Idle funds below the planned deposit & \code{HOLD}: awaiting funding\\
+Mandate names the owner's own agent & \code{HOLD} \code{OWNER\_AGENT\_<KIND>}: never transact for it\\
+Otherwise & \code{DEPOSIT} \(\min(\text{target}, \text{per-action cap}, \text{remaining budget})\) into the selected vault\\
+\end{btable}
+
+Every decision is recorded with its reason, the candidates and the snapshot block (repeated holds are not re-logged). Revoked, expired or replaced mandates change status and stop all decisions.
+
+\section{Executing an action safely}
+
+Executing is where most of the engineering lives. The operator execution service implements the flow below on top of the PostgreSQL execution store; its code is in \code{chain/execution.ts}.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[node distance=0.42cm and 0.5cm]
+  \node[box,text width=2.55cm] (snap) {\textbf{Snapshot}\\\scriptsize confirmed state, 5 blocks deep};
+  \node[box,text width=2.55cm,right=of snap] (prep) {\textbf{\code{prepareAction}}\\\scriptsize chain guard: authority, caps, lockup};
+  \node[box,text width=2.55cm,right=of prep] (policy) {\textbf{Policy check}\\\scriptsize recorded with the proposal};
+  \node[box,text width=2.55cm,right=of policy] (sim) {\textbf{Simulate}\\\scriptsize latest state, gas and fee caps};
+  \node[boxdark,text width=2.55cm,below=1.0cm of sim] (sign) {\textbf{Sign offline}\\\scriptsize agent's key, reserved EOA nonce};
+  \node[boxlime,text width=2.55cm,left=of sign] (save) {\textbf{Persist first}\\\scriptsize encrypted signed bytes};
+  \node[box,text width=2.55cm,left=of save] (send) {\textbf{Broadcast}\\\scriptsize at most 3 sends, 10 s apart};
+  \node[boxgreen,text width=2.55cm,left=of send] (conf) {\textbf{Confirm}\\\scriptsize receipt + exact \code{ActionExecuted}};
+  \node[boxamber,text width=2.55cm,below=1.3cm of send] (rec) {\textbf{Reconcile}\\\scriptsize outcome unknown: never re-sign};
+  \draw[arr] (snap) -- (prep); \draw[arr] (prep) -- (policy); \draw[arr] (policy) -- (sim);
+  \draw[arr] (sim) -- (sign); \draw[arr] (sign) -- (save); \draw[arr] (save) -- (send); \draw[arr] (send) -- (conf);
+  \draw[arra] (send) -- node[lbl,right=2pt]{timeout, reorg,\\missing receipt} (rec);
+  \draw[arra] (rec.west) -| node[lbl,pos=0.75,left=2pt]{retry with\\identical bytes} (conf.south);
+\end{tikzpicture}
+\caption{The signed transaction is stored before it is sent, so a crash at any point resumes the same transaction.}
+\end{figure}
+
+\paragraph{Leases and fencing} All dispatches for one operator are serialized by a row lease with a monotonic fencing token, held across RPC calls but never as an open database transaction. Every write first checks the token, so a worker that lost its lease cannot commit.
+
+\paragraph{Two kinds of nonce} The executor's \emph{action nonce} and the operator account's \emph{transaction nonce} are different things. Each action reserves its transaction nonce idempotently before signing; the reservation survives restarts.
+
+\paragraph{Persist before broadcast} The signed raw transaction is saved (AES-256-GCM encrypted, with the action ID as associated data) before any network call. After a crash the worker finds it and resumes with the same bytes instead of signing a new transaction.
+
+\paragraph{Ambiguity is never resolved by guessing} If the receipt is missing, the worker asks for the known transaction. Only when both the receipt and the transaction are explicitly absent, and the reserved nonce is still unused, does it re-broadcast, and only the identical bytes, within the persisted budget. Generic RPC errors are not taken as proof of absence.
+
+\paragraph{Releasing a blocked nonce} If policy fails before the action's deadline (for example the owner paused), the old transaction is not resent. Once a confirmed block passes its deadline, the executor is guaranteed to reject it, so the worker broadcasts those identical bytes on purpose: the revert consumes the reserved nonce instead of leaving a gap that would block every later transaction. Release sends share the counter (at most 6 sends in total).
+
+\paragraph{Reorg safety} Terminal receipts are re-checked for at least 20 blocks after inclusion. A reverted attempt keeps its executor action nonce reserved until that window has passed.
+
+\begin{stable}{@{}P{4.0cm}L@{}}
+\headrow \thead{State machine} & \thead{States}\\ \midrule
+\code{ActionProposal} & \code{POLICY\_CHECKED} \(\rightarrow\) \code{BROADCAST} \(\rightarrow\) \code{CONFIRMED} | \code{FAILED}; \code{RECONCILE} while unknown; \code{REJECTED} when the guard refuses before signing.\\
+\code{TransactionAttempt} & \code{SIGNED} \(\rightarrow\) \code{BROADCAST} \(\rightarrow\) \code{CONFIRMED} | \code{REVERTED}; \code{RECONCILE} when ambiguous.\\
+\end{stable}
+
+\section{Watching for risk}
+
+\code{RiskEventMonitor} (\code{chain/monitor.ts}) scans \code{RiskStateChanged} logs, but only from the two pinned vault addresses and only at the configured confirmation depth.
+
+\begin{itemize}
+  \item It keeps a durable cursor (next block and the previous block's hash). If that hash changes or the chain goes backwards, it rewinds to the deployment block and rescans, marking affected observations as orphaned.
+  \item Each scan overlaps the previous one by 20 blocks; events are deduplicated by chain, transaction hash and log index.
+  \item Scans cover at most 180 new blocks (\code{MONITOR\_BATCH\_BLOCKS}), so each log query spans 199 blocks: the public Base Sepolia RPC rejects ranges above about 200.
+  \item An event never triggers an action directly. It only enqueues an evaluation, which re-reads the vault, position and mandate from the chain.
+  \item Historical risk is recorded separately from the current state, so an old warning does not override a vault that has recovered.
+\end{itemize}
+
+\begin{note}[Found in the first live run]
+The first run against Base Sepolia showed every monitor poll failing: the worker asked for 520-block log ranges and the public RPC accepts about 200. The batch size is now 180 by default and configurable. On first start the monitor needs roughly 40 minutes to catch up from the deployment block, once.
+\end{note}

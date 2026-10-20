@@ -1,0 +1,74 @@
+\chapter{API and sessions}\label{ch:api}
+
+The API is a NestJS application under \code{/api/v1}. The machine-readable contract lives in \code{docs/openapi.json}; outside production, Swagger UI shows it at \code{/api/docs}. It never holds keys: everything that changes the chain is a transaction the owner signs.
+
+\section{Signing in with Ethereum}
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \foreach \x/\name/\sty in {0/Owner wallet/boxlime,5.0/Web app/box,10.0/API/box}{
+    \node[\sty,text width=2.6cm,minimum height=7mm] at (\x,0) {\textbf{\name}};
+    \draw[bSage,line width=0.6pt,dashed] (\x,-0.45) -- (\x,-6.3);
+  }
+  \newcommand{\msg}[5][arr]{\draw[#1] (#2,#3) -- node[lbl,above=1pt]{#5} (#4,#3);}
+  \msg{5.0}{-1.0}{10.0}{\stepno{1} \code{POST /auth/challenge \{address\}}}
+  \msg[arrm]{10.0}{-1.8}{5.0}{\stepno{2} SIWE message: origin, chain 84532, nonce}
+  \msg{5.0}{-2.6}{0}{\stepno{3} ask to sign (not a transaction)}
+  \msg[arrm]{0}{-3.4}{5.0}{\stepno{4} signature}
+  \msg{5.0}{-4.2}{10.0}{\stepno{5} \code{POST /auth/verify \{message, signature\}}}
+  \node[boxsage,text width=4.2cm,font=\scriptsize,anchor=west] at (10.25,-4.95) {nonce consumed once; signature, origin, chain and expiry checked};
+  \msg[arrm]{10.0}{-5.7}{5.0}{\stepno{6} session cookie + CSRF token}
+\end{tikzpicture}
+\caption{Signing in never approves a mandate or a transaction.}
+\end{figure}
+
+\begin{itemize}
+  \item The challenge is an EIP-4361 (SIWE) message bound to the web origin, chain 84532 and a single-use nonce that expires after 5 minutes. The web app refuses to ask for a signature if the message names another origin.
+  \item Verification sets the \code{\_\_Host-boundra\_session} cookie (HttpOnly, Secure, SameSite=Strict, 12 hours) and returns a CSRF token.
+  \item Every \code{POST} and \code{PATCH} needs the \code{Origin} header equal to \code{WEB\_ORIGIN} and the \code{X-CSRF-Token} header.
+  \item The owner is always taken from the session. Addresses in request bodies are never used for authorization, and another owner's resources return \code{404}.
+  \item Bodies are limited to 16 KB; sign-in routes allow 10 requests a minute per client, other routes 120.
+\end{itemize}
+
+\section{API tokens for apps and assistants}
+
+Apps built with the SDK and AI assistants using the MCP server sign in with an \emph{API token} instead of the cookie:
+
+\begin{enumerate}
+  \item \code{POST /auth/challenge \{address, client: "token"\}} returns a SIWE message whose statement tells the owner exactly what they grant: the token can read the account and prepare mandates for review, and cannot approve anything, sign transactions or move funds.
+  \item The owner's wallet signs it. Verification returns the token and sets no cookie. The signed statement decides the session kind, so an altered statement is rejected.
+  \item Clients send \code{Authorization: Bearer <token>}. No CSRF token is needed, since browsers never attach this header on their own, and CORS still admits only the web origin.
+\end{enumerate}
+
+Tokens and cookies are never interchangeable, admin routes need the admin's browser session, and tokens are listed and revoked from the web app (\code{GET /auth/tokens}, \code{POST /auth/tokens/:id/revoke}, browser session only). Only token hashes are stored.
+
+\section{The owner journey as API calls}
+
+\begin{btable}{@{}P{2.7cm}P{6.2cm}L@{}}
+\headrow \thead{Step} & \thead{Request} & \thead{Notes}\\ \midrule\endhead
+Public config & \code{GET /config/public} & Reviewed addresses, operator, vault descriptors.\\
+Executor & wallet: \code{faucet.claim()}, \code{factory.createExecutor()}; then \code{POST /executors/register} & The server reads \code{executorOf(owner)}; the body is ignored.\\
+Intent & \code{POST /intents \{objective, amount, chainId\}} & Rejects amounts above wallet plus executor balance.\\
+Clarify & \code{POST /intents/:id/answers \{questionId, alternativeId\}} & One question at a time.\\
+Draft & \code{POST /intents/:id/mandate-drafts \{…\}} & Tuple, preview, \code{previewHash}; optional \code{operator}.\\
+Edit & \code{PATCH /mandate-drafts/:id} & Always a new revision.\\
+Approve & \code{POST /mandate-drafts/:id/approve \{previewHash\}} & Returns the exact owner transactions.\\
+Authorize & wallet: \code{setMandate}, \code{approve}, \code{fund}; then \code{POST …/authorization-check} & The worker sets \code{AUTHORIZED}.\\
+Monitor & \code{GET /dashboard}, \code{GET /activity} & Confirmed balances, positions and timeline.\\
+Control & wallet: \code{pause}, \code{resume}, \code{revoke}, \code{recoverIdle}, \code{ownerWithdraw} & The worker observes the change and stops.\\
+\end{btable}
+
+\section{Errors and health}
+
+Errors have one shape, with a stable \code{code}, a message and a recovery hint; internals are never echoed.
+
+\begin{lstlisting}
+{ "error": { "code": "STALE_PREVIEW",
+             "message": "...",
+             "recovery": "Reload the latest preview and review it again." } }
+\end{lstlisting}
+
+{\raggedright Codes include \code{UNAUTHENTICATED}, \code{CSRF\_REJECTED}, \code{RATE\_LIMITED}, \code{VALIDATION\_FAILED}, \code{CHALLENGE\_INVALID}, \code{WRONG\_CHAIN}, \code{INSUFFICIENT\_BALANCE}, \code{STALE\_PREVIEW}, \code{INVALID\_STATE} and \code{DEPENDENCY\_UNAVAILABLE}.\par}
+
+\code{GET /health/live} answers when the process is up; \code{GET /health/ready} also reports PostgreSQL, a fresh worker heartbeat and the worker's mode. The web app's \code{/status} combines this with the web release for monitoring.

@@ -1,0 +1,78 @@
+\chapter{Clarification: ACCE}\label{ch:acce}
+
+ACCE (Action-Conditioned Counterfactual Elicitation) decides which questions to ask the owner. Its rule is simple: \emph{ask a question only if some possible answer would change the action the agent may take}. Everything here is deterministic code in \code{packages/acce}; a language model can at most reword a question that ACCE has already chosen.
+
+\section{What the owner is asked about}
+
+ACCE works on a small set of \emph{dimensions}. Each has fixed alternatives, an ``unsure'' option, and ordinal weights from 0 to 3: materiality \(M\) (how much it matters), uncertainty \(U\) (how unclear it is from the goal alone) and friction (how annoying the question is).
+
+\begin{stable}{@{}P{3.9cm}P{3.2cm}>{\centering\arraybackslash}p{0.45cm}>{\centering\arraybackslash}p{0.45cm}>{\centering\arraybackslash}p{0.8cm}L@{}}
+\headrow \thead{Dimension} & \thead{Alternatives} & \thead{M} & \thead{U} & \thead{Fric.} & \thead{Enforced by}\\ \midrule
+\code{max\_lockup\_seconds} & no lockup, up to 30 days, unsure & 3 & 3 & 0 & on-chain \code{maxLockupSeconds}\\
+\code{withdrawal\_latency\_\allowbreak seconds} & within a day, not for 30 days, unsure & 3 & 3 & 1 & eligibility excludes lockup vaults\\
+\code{permitted\_vaults} & any reviewed, Liquid only, unsure & 1 & 1 & 3 & on-chain \code{allowedVaults}\\
+\code{leverage} & none, leverage OK, unsure & 3 & 1 & 1 & structural: no leveraged vault exists\\
+\end{stable}
+
+The amount comes from the owner's goal and the expiry from reviewed defaults; neither is an ACCE question. Unanswered dimensions take the conservative default (no lockup, funds needed soon). The table and the vault descriptors are configuration version \code{v1}; changing them needs a new version, and never after a held-out benchmark run (chapter~\ref{ch:testing}).
+
+\begin{keypoint}[Never a silent opt-in]
+``Unsure'' is always allowed. It resolves to the conservative value and is shown to the owner as \emph{narrowed}. Contradictory answers (accepting a lockup but needing the money within a day) are also narrowed and explained, never silently resolved in the riskier direction.
+\end{keypoint}
+
+\section{The algorithm}
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[node distance=0.55cm and 0.95cm]
+  \node[boxlime,text width=3.0cm] (goal) {\textbf{Goal + amount}\\\scriptsize ``Grow 300 MockUSDC safely''};
+  \node[box,text width=3.0cm,right=of goal] (elig) {\textbf{1. Eligibility}\\\scriptsize per vault, with reasons};
+  \node[box,text width=3.0cm,right=of elig] (sel) {\textbf{2. Selection}\\\scriptsize Timed only if accepted};
+  \node[box,text width=3.0cm,below=1.0cm of sel] (flip) {\textbf{3. DecisionFlip}\\\scriptsize would an answer change it?};
+  \node[box,text width=3.0cm,left=of flip] (score) {\textbf{4. Score}\\\scriptsize \(M\times U\times F-\text{friction}\)};
+  \node[boxsage,text width=3.0cm,left=1.2cm of score] (ask) {\textbf{Ask the best}\\\scriptsize one question at a time};
+  \node[boxgreen,text width=3.0cm,below=1.0cm of flip] (draft) {\textbf{Mandate draft}\\\scriptsize exact tuple + preview};
+  \node[boxamber,text width=2.3cm,right=1.3cm of sel] (esc) {\textbf{Escalate}\\\scriptsize tell the owner why};
+
+  \draw[arr] (goal) -- (elig);
+  \draw[arr] (elig) -- (sel);
+  \draw[arr] (sel) -- (flip);
+  \draw[arr] (flip) -- (score);
+  \draw[arr] (score) -- node[lbl,above=2pt]{score \(>0\)} (ask);
+  \draw[arr] (ask.north) to[out=90,in=-90] node[lbl,pos=0.4]{answer} ($(goal.south)+(0,0)$);
+  \draw[arr] (score.south) |- node[lbl,pos=0.25]{no score \(>0\)\\or 5 asked} ($(draft.west)+(0,0.15)$);
+  \draw[arra] (sel) -- node[lbl,above=3pt]{none} node[lbl,below=3pt]{eligible} (esc);
+\end{tikzpicture}
+\caption{ACCE re-plans after every answer and stops as soon as no remaining answer could change the action.}
+\end{figure}
+
+\begin{enumerate}
+  \item \term{Eligibility.} Each deposit candidate (LiquidVault, TimedVault) is checked against what is known, with explicit reasons: not permitted, lockup above tolerance, withdrawal latency above the liquidity need, leverage.
+  \item \term{Selection.} TimedVault is selected only if it is eligible \emph{and} the owner explicitly accepted its lockup in exchange for its higher illustrative yield. Otherwise LiquidVault; if nothing is eligible, the intent escalates.
+  \item \term{DecisionFlip.} For every unresolved dimension, ACCE builds a truth table over all combinations of answers to the \emph{other} unresolved dimensions and checks how often varying this one changes the selected action. That share maps to a value from 1 to 3; a dimension that never flips the decision gets 0 and is dropped.
+  \item \term{Score and stop.} Each remaining dimension scores
+  \[\text{score} = M \times U \times \text{DecisionFlip} - \text{Friction}.\]
+  The highest positive score is asked next (ties by dimension order). ACCE stops when no score is positive, or after five questions.
+\end{enumerate}
+
+\section{Worked examples}
+
+These outcomes are covered by tests.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+  \node[boxsage,text width=5.2cm] (q1) at (0,0) {\textbf{Q1} Would you accept not withdrawing for 30 days for a higher illustrative yield?};
+  \node[boxlime,text width=2.9cm] (a) at (-5.1,-2.5) {\textbf{LiquidVault}\\\scriptsize 1 question};
+  \node[boxsage,text width=3.9cm] (q2) at (0,-2.5) {\textbf{Q2} Will you need this money within 30 days?};
+  \node[boxlime,text width=2.9cm] (c) at (5.1,-2.5) {\textbf{LiquidVault}\\\scriptsize 1 question, narrowed};
+  \node[boxlime,text width=2.7cm] (d) at (-2.0,-4.9) {\textbf{LiquidVault}\\\scriptsize 2 questions};
+  \node[boxgreen,text width=2.7cm] (e) at (2.0,-4.9) {\textbf{TimedVault}\\\scriptsize 2 questions};
+  \draw[arr] (q1.south) -- node[lbl]{No} (a.north);
+  \draw[arr] (q1.south) -- node[lbl]{Yes} (q2.north);
+  \draw[arr] (q1.south) -- node[lbl]{Unsure} (c.north);
+  \draw[arr] (q2.south) -- node[lbl]{Yes} (d.north);
+  \draw[arr] (q2.south) -- node[lbl]{No} (e.north);
+\end{tikzpicture}
+\caption{Leverage is never asked: no leveraged vault exists, so no answer could change the action.}
+\end{figure}

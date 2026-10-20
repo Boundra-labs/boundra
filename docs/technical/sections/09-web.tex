@@ -1,0 +1,49 @@
+\chapter{Web app}\label{ch:web}
+
+The web app (Next.js 16, React 19, wagmi 3, viem) is where owners do everything: sign in, set up their executor, describe a goal, answer ACCE's questions, review and approve the mandate, sign it into the contract, then watch and control the agent.
+
+\section{Pages}
+
+\begin{stable}{@{}P{3.5cm}L@{}}
+\headrow \thead{Route} & \thead{What the owner does there}\\ \midrule
+\code{/} & Landing page in the ``Living Boundary'' design.\\
+\code{/app} & Sign in, one-time account setup (faucet, create executor), then the overview: funds, positions, controls and activity.\\
+\code{/app/intents/[id]} & Answer clarifying questions one at a time, with ``unsure'' always available.\\
+\code{/app/mandates/[id]} & Review the mandate in plain language, edit, approve, then authorize and fund it from the wallet.\\
+\code{/app/risk} & Risk admin only: change a vault's risk state and capacity from the risk admin's wallet.\\
+\code{/app/connect} & \emph{Apps \& AI}: create an API token (shown once, with a ready MCP configuration), see and revoke tokens.\\
+\code{/status} & Same-origin readiness for monitoring: API, database, worker mode, releases.\\
+\end{stable}
+
+\section{Wallet transactions done honestly}
+
+Every owner transaction is built from the exact values the API returned (amounts as exact base units, never rounded) and goes through the same handling:
+
+\begin{itemize}
+  \item The network guard keeps the wallet on chain 84532 and offers to add or switch the network.
+  \item Before asking the wallet, the app simulates the call and sets its own gas limit, instead of trusting a wallet estimate made against a different node.
+  \item States are shown honestly: waiting for the wallet, sent, confirmed, or reverted. A sent transaction is never shown as done until it is confirmed, and wallet errors are reported in plain language.
+  \item Balances, positions and mandate status shown to the owner come from chain-confirmed state through the API.
+\end{itemize}
+
+\section{Reviewing a mandate}
+
+The review screen is where consent happens, so it shows everything that will be enforced: the selected vault, every cap, the lockup, the expiry, the operator (marked ``your own agent'' when the owner named one), every notice and the testnet labels. Approval sends the \code{previewHash} of exactly that preview. Any edit produces a new revision that must be reviewed again.
+
+\begin{keypoint}[Plain language, exact numbers]
+Agent escalations, holds and refusals are explained in words an owner understands (for example why the agent is waiting, or why funds cannot leave a locked vault yet), while every amount stays exact. The activity timeline links to the block explorer only for real transactions.
+\end{keypoint}
+
+\section{Design}
+
+The visual language follows the approved ``Living Boundary'' references: a forest, sage and lime palette on ivory, the two-arc mark that holds a lime core (the owner's intent), Plus Jakarta Sans for text and Newsreader for headlines. This document uses the same palette.
+
+\begin{center}
+\begin{tikzpicture}
+  \foreach \c/\n/\h [count=\i from 0] in {bForest/Forest/122D27,bGreen/Green/23674E,bSage/Sage/9BAF8D,bLime/Lime/A6C74C,bAmber/Amber/D8A13B,bIvory/Ivory/F6F8F2}{
+    \fill[\c,draw=bLine,rounded corners=3pt] (\i*2.6,0) rectangle ++(2.3,1.1);
+    \node[anchor=north west,font=\small\bfseries] at (\i*2.6,-0.12) {\n};
+    \node[anchor=north west,font=\scriptsize\ttfamily,text=bMuted] at (\i*2.6,-0.55) {\#\h};
+  }
+\end{tikzpicture}
+\end{center}

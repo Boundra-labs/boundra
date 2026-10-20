@@ -1,0 +1,89 @@
+\chapter{From answers to an authorized mandate}\label{ch:mandates}
+
+Once ACCE has a selection, the mandate builder turns it into the exact tuple the executor expects, plus a plain-language preview. Nothing reaches the chain until the owner has reviewed that preview and signed the transactions themselves.
+
+\section{The draft}
+
+The builder (\code{buildMandate} in \code{packages/acce}) fills every field deterministically:
+
+\begin{itemize}
+  \item \code{allowedVaults} contains only the selected vault, and \code{maxLockupSeconds} equals that vault's lockup (0 for Liquid, 30 days for Timed).
+  \item The deposit cap, the total budget and the allocation target equal the requested amount. If the owner sets a smaller per-action cap, the preview explains that the single allocation will be partial and the rest stays idle.
+  \item The withdrawal cap covers the whole position, so a risk exit can take everything out at once.
+  \item The beneficiary is the owner. The expiry is 7 days by default, or the lockup plus 2 days for TimedVault (at most 60 days).
+  \item The operator is Boundra's agent by default, or an agent the owner names (section~\ref{sec:own-agent}).
+\end{itemize}
+
+The \term{preview} lists every limit, how it is enforced and the testnet labels, plus a plain summary and notices. Its canonical JSON is hashed (keccak256) into the \code{previewHash}. Approval must present that exact hash, so the owner can only approve what they were shown; an edit always creates a new revision and supersedes the old one.
+
+\section{Authorization, step by step}
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[x=1cm,y=1cm]
+  % Lifelines
+  \foreach \x/\name/\sty in {0/Owner wallet/boxlime,4.2/Web app + API/box,8.4/Worker/boxdark,12.6/Executor/boxgreen}{
+    \node[\sty,text width=2.5cm,minimum height=7mm] (h\x) at (\x,0) {\textbf{\name}};
+    \draw[bSage,line width=0.6pt,dashed] (\x,-0.45) -- (\x,-8.9);
+  }
+  \newcommand{\msg}[5][arr]{\draw[#1] (#2,#3) -- node[lbl,above=1pt]{#5} (#4,#3);}
+  \msg{0}{-1.0}{4.2}{\stepno{1} approve with \code{previewHash}}
+  \msg[arrm]{4.2}{-1.8}{0}{\stepno{2} exact owner transactions}
+  \msg{0}{-2.6}{12.6}{\stepno{3} \code{setMandate(tuple)}}
+  \msg{0}{-3.4}{12.6}{\stepno{4} MockUSDC \code{approve}, then \code{fund(amount)}}
+  \msg{0}{-4.2}{4.2}{\stepno{5} authorization check}
+  \msg[arrm]{4.2}{-5.0}{8.4}{\stepno{6} job: verify authorization}
+  \msg[arrm]{8.4}{-5.8}{12.6}{\stepno{7} read confirmed state}
+  \node[boxsage,text width=4.6cm,font=\scriptsize] at (10.5,-6.75) {\stepno{8} tuple matches field by field, hash matches, funds confirmed};
+  \msg{8.4}{-8.3}{4.2}{\stepno{9} \code{AUTHORIZED}}
+\end{tikzpicture}
+\caption{Only the worker marks a mandate \code{AUTHORIZED}, and only from confirmed chain state.}
+\end{figure}
+
+\begin{keypoint}[Why the worker checks, not the API]
+The browser could report anything. The worker reads the executor at the configured confirmation depth (5 blocks), compares the on-chain tuple with the approved revision field by field and checks the mandate hash and funding. Until then the agent does nothing.
+\end{keypoint}
+
+\FloatBarrier
+\section{State machines}
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[node distance=0.5cm and 0.9cm]
+  \node[font=\small\bfseries,text=bGreen,anchor=west] at (-0.3,0.85) {Intent};
+  \node[state] (i1) at (0,0) {INTENT\_RECEIVED};
+  \node[state,right=of i1] (i2) {CLARIFYING};
+  \node[state,right=of i2] (i3) {MANDATE\_PENDING};
+  \node[stateok,right=of i3] (i4) {AUTHORIZED};
+  \node[statebad,below=0.6cm of i2] (i5) {ESCALATED};
+  \node[statedone,below=0.6cm of i3] (i6) {REJECTED};
+  \draw[arr] (i1) -- (i2); \draw[arr] (i2) -- (i3); \draw[arr] (i3) -- (i4);
+  \draw[arra] (i2) -- node[lblc,right]{nothing eligible} (i5);
+  \draw[arrm] (i3) -- node[lblc,right]{demo reset} (i6);
+
+  \node[font=\small\bfseries,text=bGreen,anchor=west] at (-0.3,-2.35) {Mandate revision};
+  \node[state] (m1) at (0,-3.2) {PREVIEWED};
+  \node[state,right=1.3cm of m1] (m2) {APPROVED};
+  \node[stateok,right=1.3cm of m2] (m3) {AUTHORIZED};
+  \node[statedone,right=1.4cm of m3,yshift=0.9cm] (m4) {REVOKED};
+  \node[statedone,right=1.4cm of m3] (m5) {EXPIRED};
+  \node[statedone,right=1.4cm of m3,yshift=-0.9cm] (m6) {SUPERSEDED};
+  \draw[arr] (m1) -- node[lblc,above]{owner} (m2);
+  \draw[arr] (m2) -- node[lblc,above]{worker} (m3);
+  \draw[arrm] (m3.east) -- (m4.west); \draw[arrm] (m3.east) -- (m5.west); \draw[arrm] (m3.east) -- (m6.west);
+  \draw[arrm] (m1.south) to[out=-35,in=180] node[lblc,below,pos=0.45]{an edit creates a new revision} (m6.west);
+\end{tikzpicture}
+\caption{At most one mandate per executor can be \code{AUTHORIZED} (a partial unique index in PostgreSQL).}
+\end{figure}
+
+\section{Choosing the agent}\label{sec:own-agent}
+
+By default the mandate names Boundra's agent (\code{OPERATOR\_ADDRESS}). An owner who runs their own agent can name its address instead (the \code{operator} field of a draft). Then:
+
+\begin{itemize}
+  \item the preview carries \code{operatorSource: "OWNER"} and, as its first notice, says that Boundra does not run or vouch for that agent; both are inside the hashed preview the owner approves;
+  \item the address may not be the owner, their executor, the zero address, a Boundra contract or the risk admin;
+  \item Boundra's worker keeps monitoring the mandate (risk, expiry, escalation) but never transacts for it: it records \code{HOLD} with reason \code{OWNER\_AGENT\_<KIND>}.
+\end{itemize}
+
+The owner's own agent then acts through the SDK or MCP server (chapter~\ref{ch:sdk}), bounded by exactly the same contract checks.

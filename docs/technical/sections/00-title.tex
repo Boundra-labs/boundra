@@ -1,0 +1,34 @@
+% Cover page, then the contents.
+\begin{titlepage}
+\thispagestyle{empty}
+\begin{tikzpicture}[remember picture,overlay]
+  \fill[bForest] (current page.south west) rectangle (current page.north east);
+  % Two faint arcs echo the mark across the page.
+  \draw[bGreen,line width=26pt,opacity=0.35]
+    ($(current page.south east)+(-2.2,6.5)$) arc[start angle=-10,end angle=120,radius=9.5];
+  \draw[bLime,line width=3pt,opacity=0.55]
+    ($(current page.south east)+(-1.2,4.6)$) arc[start angle=-20,end angle=95,radius=7.2];
+  \node[anchor=north west,inner sep=0] at ($(current page.north west)+(2.3,-2.6)$)
+    {\brandmarkcol[1.5]{bIvory}};
+  \node[anchor=north west,inner sep=0,text width=14.5cm,align=left]
+    at ($(current page.north west)+(2.3,-6.4)$) {%
+    {\color{bLime}\small\bfseries\MakeUppercase{Technical document}}\\[10pt]
+    {\headfont\fontsize{46}{50}\selectfont\color{bIvory}Boundra}\\[8pt]
+    {\headfont\LARGE\color{bIvory}Autonomy within your boundaries}\\[18pt]
+    {\large\color{bMutedDark}A risk-aligned agent wallet: an AI agent manages funds for an owner,\\[2pt]
+      and the owner's limits are enforced by a smart contract, not by trust.}};
+  \node[anchor=south west,inner sep=0,text width=15cm,align=left]
+    at ($(current page.south west)+(2.3,2.4)$) {%
+    {\small\color{bMutedDark}%
+    \begin{tabular}{@{}l@{\hspace{1.2em}}l@{}}
+      \color{bLime}\bfseries Event   & FinTechathon 2026, Topic F\\
+      \color{bLime}\bfseries Network & Base Sepolia testnet (chain 84532) with MockUSDC and mock vaults\\
+      \color{bLime}\bfseries Version & Repository \texttt{main} at commit \texttt{0593c8a}, 20 October 2026\\
+      \color{bLime}\bfseries Team    & Person 1 (contracts, chain) · Person 2 (backend, ACCE, data)\\
+                                     & Person 3 (frontend, delivery, QA)\\
+    \end{tabular}}};
+\end{tikzpicture}
+\end{titlepage}
+
+{\setlength{\parskip}{0pt}\tableofcontents}
+\clearpage

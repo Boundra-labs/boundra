@@ -1,0 +1,52 @@
+\chapter{Overview}
+
+\begin{note}[How to read this document]
+Chapters~\ref{ch:architecture}--\ref{ch:sdk} follow the system from the chain upwards: contracts, clarification, mandates, the agent, data, API, web app, language model and integrations. Chapter~\ref{ch:security} collects the security model, chapter~\ref{ch:testing} the evidence and chapter~\ref{ch:deployment} how it runs. The appendix has a glossary and a map of where each topic lives in the repository.
+\end{note}
+
+\section{The problem}
+
+People increasingly want software agents, including AI agents, to act on their money: move savings into a vault, pull it out when a risk appears, keep it working while they are busy. Today that usually means one of two bad choices. Either the agent gets a key that can do \emph{anything} with the funds, so the owner has to trust it completely, or every action waits for the owner's manual approval, so it is not really an agent.
+
+There is a second, quieter problem: the agent often does not know what the owner actually wants. ``Keep my money safe but earn something'' says nothing about whether the owner can live without the money for a month. An agent that guesses can lock funds the owner needs next week.
+
+\section{The idea}
+
+Boundra solves both problems with two pieces that work together:
+
+\begin{enumerate}
+  \item \term{Ask only what changes the decision.} Before anything is set up, Boundra asks the owner a few clarifying questions, chosen by an algorithm called ACCE (Action-Conditioned Counterfactual Elicitation). It asks a question only if the answer could change which action the agent is allowed to take, and it stops as soon as no answer could.
+  \item \term{Turn the answers into limits a contract enforces.} The answers become a \emph{mandate}: an exact set of limits (which vaults, how much per action, how much in total, how long funds may be locked, until when). The owner reviews it in plain language, approves it, and signs it into their own \emph{executor} contract on the blockchain. From then on the agent can only do what the mandate allows, and the contract rejects everything else.
+\end{enumerate}
+
+\begin{principle}{The guarantee in one sentence}
+Even if the agent's key is stolen or its model is wrong, the worst it can do is bounded by the mandate the owner signed, withdrawals always pay the owner, and the owner can pause or revoke at any time.
+\end{principle}
+
+\section{Design principles}
+
+\begin{stable}{@{}P{4.2cm}L@{}}
+\headrow \thead{Principle} & \thead{What it means in the implementation}\\ \midrule
+No owner keys, ever & The server never holds or asks for the owner's private key. Every owner action (create executor, set mandate, fund, pause, revoke, recover) is a transaction the owner signs in their own wallet.\\
+The contract is the boundary & Limits are checked by \code{BoundraExecutor} on chain. The backend checks them too, but only to fail early and explain; it is never the last line of defence.\\
+Authority is deterministic & Which questions are asked, which vault is selected and which limits are drafted are decided by deterministic code. A language model may only reword text, and its output is validated with a template fallback.\\
+Chain state is the truth & PostgreSQL stores workflow and history. Before every action the worker re-reads confirmed chain state and reconciles; a database row is never taken as proof of authority, funding or execution.\\
+Honest evidence & No invented addresses, transaction hashes or benchmark results. Activity entries link to the block explorer only for real transactions; holds and refusals carry no hash.\\
+Testnet only & Base Sepolia with MockUSDC and two controlled mock vaults. Nothing here touches real funds before an independent audit.\\
+\end{stable}
+
+\section{Boundra at a glance}
+
+\begin{btable}{@{}P{3.4cm}P{4.6cm}L@{}}
+\headrow \thead{Part} & \thead{Technology} & \thead{Role}\\ \midrule\endhead
+Smart contracts & Solidity 0.8.30, Foundry & MockUSDC, faucet, two mock vaults, factory, one executor per owner.\\
+Web app & Next.js 16, React 19, wagmi 3, viem 2.57 & Owner journey, wallet transactions, risk admin page, API tokens.\\
+API & NestJS 11, Zod, Prisma 7 & Sign-in with Ethereum, intents and ACCE, mandate drafts, dashboard, activity.\\
+Worker & NestJS, viem & Chain monitor, decision policy, bounded execution with crash recovery.\\
+Database & PostgreSQL 17 & Workflow, decisions, transaction attempts, jobs, activity.\\
+ACCE & TypeScript package & Question selection, vault selection, mandate builder.\\
+Language model & OpenAI or Anthropic (optional) & Rewording questions and summaries only, always validated.\\
+SDK and MCP server & TypeScript, MCP SDK 1.32 & Let other apps, AI assistants and owners' own agents use Boundra within the same limits.\\
+Deployment & Docker Compose with Caddy, or Render & Reproducible stack with HTTPS, backups and health checks.\\
+\end{btable}
+
