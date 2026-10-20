@@ -1,8 +1,10 @@
+import { apiInternalUrl } from '@/lib/api-upstream';
+
 /**
  * Same-origin proxy to the Boundra API. Sessions use a first-party `__Host-` cookie and every
  * state change is checked against `WEB_ORIGIN`, so the browser must reach the API through the
- * web origin. Caddy routes `/api/*` straight to the API in a public deployment; this handler
- * covers `next dev` and the Compose stack, where only the web container is exposed.
+ * web origin. In a public Compose deployment Caddy routes `/api/*` straight to the API; this
+ * handler covers `next dev`, the Compose stack and Render, where only the web app is exposed.
  *
  * The upstream is read per request (not baked in at build time like a rewrite), and only
  * `/api/v1/*` paths are forwarded. SDK and MCP clients' bearer API tokens pass through too.
@@ -47,10 +49,7 @@ async function proxy(request: Request) {
   if (!pathname.startsWith('/api/v1/'))
     return Response.json({ error: { code: 'NOT_FOUND', message: 'Not found' } }, { status: 404 });
 
-  const upstream = new URL(
-    pathname + search,
-    process.env.API_INTERNAL_URL ?? 'http://127.0.0.1:3001',
-  );
+  const upstream = new URL(pathname + search, apiInternalUrl());
   const headers = new Headers();
   for (const name of FORWARDED_REQUEST_HEADERS) {
     const value = request.headers.get(name);

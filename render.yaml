@@ -1,0 +1,88 @@
+# Render Blueprint, free plan: one free web service runs the web app, the API and the worker
+# together (deploy/render-free.sh), with a free PostgreSQL database. Only the web app is public;
+# the API listens on loopback inside the container. BOUNDRA_SERVICE (passed to the build as an
+# argument) picks the all-in-one image. Values marked `sync: false` are secrets or per-deployment
+# settings entered in the Render dashboard when the Blueprint is first created; never commit them.
+# Free instances sleep when idle and the free database expires: see docs/deploy-render.md.
+
+databases:
+  - name: boundra-db
+    plan: free
+    region: singapore
+    postgresMajorVersion: '17'
+    databaseName: boundra
+    user: boundra
+
+services:
+  - type: web
+    name: boundra
+    plan: free
+    runtime: docker
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    # Ready only when the API, its database and a fresh worker heartbeat all are.
+    healthCheckPath: /status
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: BOUNDRA_SERVICE
+        value: all
+      - key: DATABASE_URL
+        fromDatabase:
+          name: boundra-db
+          property: connectionString
+      - key: CHAIN_ID
+        value: '84532'
+      - key: BASE_SEPOLIA_RPC_URL
+        value: https://sepolia.base.org
+      - key: DEPLOYMENT_MANIFEST_PATH
+        value: /config/manifests/base-sepolia.json
+      - key: CHAIN_CONFIRMATIONS
+        value: '5'
+      - key: WORKER_HEARTBEAT_MAX_AGE_MS
+        value: '45000'
+
+      # API
+      # Behind Render's proxy and the web app's /api proxy.
+      - key: TRUST_PROXY
+        value: 'true'
+      - key: SESSION_SECRET
+        generateValue: true
+      # The service's public origin, e.g. https://boundra.onrender.com or a custom domain.
+      - key: WEB_ORIGIN
+        sync: false
+      # Boundra's agent: public address only, never the key.
+      - key: OPERATOR_ADDRESS
+        sync: false
+      # Risk admin wallet(s), lowercase, comma-separated.
+      - key: ADMIN_ADDRESSES
+        sync: false
+      - key: LLM_PROVIDER
+        value: openai
+      - key: LLM_MODEL
+        value: gpt-4.1-mini
+      - key: LLM_API_KEY
+        sync: false
+
+      # Worker
+      - key: WORKER_POLL_INTERVAL_MS
+        value: '10000'
+      - key: RECEIPT_REORG_WINDOW_BLOCKS
+        value: '20'
+      - key: MONITOR_BATCH_BLOCKS
+        value: '180'
+      - key: EXECUTION_ENABLED
+        value: 'true'
+      # The agent's own key (never the owner's, deployer's or risk admin's).
+      - key: OPERATOR_PRIVATE_KEY
+        sync: false
+      # 64 hex characters; `node scripts/setup.mjs --deploy` generates one.
+      - key: ATTEMPT_ENCRYPTION_KEY
+        sync: false
+      - key: MAX_GAS
+        value: '1000000'
+      - key: MAX_FEE_PER_GAS_WEI
+        value: '1000000000'
+      - key: MAX_PRIORITY_FEE_PER_GAS_WEI
+        value: '100000000'
+      - key: ACTION_DEADLINE_SECONDS
+        value: '300'

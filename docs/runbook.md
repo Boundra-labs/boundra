@@ -48,6 +48,8 @@ Stuck actions stay `RECONCILE` and are retried automatically; an operator EOA no
 
 ## Deploy, release and roll back
 
+**Render.** To host on Render instead of a server with Compose, see [deploy-render.md](./deploy-render.md).
+
 **Settings.** The Docker stack reads `deploy/.env` (create it with `node scripts/setup.mjs --deploy`; template `deploy/env.example`). Pass `--env-file deploy/.env` to every `docker compose` command. It holds secrets: keep it readable by the operator only. Chain configuration: put the reviewed manifest in `deploy/manifests/` and set `DEPLOYMENT_MANIFEST_PATH=/config/manifests/<file>.json`; without it the worker stays `observe_only`.
 
 **Release identifier.** `RELEASE` (use `git describe --always --dirty`, or the tag) is baked into the images and tags them (`${IMAGE_PREFIX}-web:${RELEASE}` and so on). `/status` returns `release.web` and `release.api`, `/api/v1/health/live` returns `release`, the worker logs its release at startup, and the footer shows it. Check them after every deploy.
