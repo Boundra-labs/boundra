@@ -157,7 +157,23 @@ Contract tests (32, Foundry) & Owner-only changes, caps, lockup, replay, arbitra
 API and worker integration (24, 29) & Sessions, tokens, owner isolation; leases, crash recovery, concurrency.\\
 Browser suites (53 mocked, 2 real) & Every owner transaction, and the full journey with nothing mocked.\\
 Base Sepolia run & Real owner and agent transactions; see the execution evidence report.\\
+Public source verification & Every deployed contract matches the repository's source, checked by independent explorers (below).\\
 \end{stable}
+
+\subsection{Verified contract source}
+
+Each deployed contract's source was published and verified against its on-chain bytecode, so anyone can read exactly what runs at the addresses in the reviewed manifest. This backs the bytecode comparison done before the manifest was pinned, and the mitigation of R4.
+
+\begin{stable}{@{}P{3.1cm}P{7.2cm}L@{}}
+\headrow \thead{Contract} & \thead{Address} & \thead{Verified on}\\ \midrule
+MockUSDC & \href{https://base-sepolia.blockscout.com/address/0x13e7a4d02941a029Cf841f16E38eF377cb21e1Cf}{\texttt{\footnotesize 0x13e7a4d02941a029Cf841f16E38eF377cb21e1Cf}} & Blockscout\\
+MockUSDCFaucet & \href{https://base-sepolia.blockscout.com/address/0xEbdc09B132066fF067E30FE077A58E818801FA2f}{\texttt{\footnotesize 0xEbdc09B132066fF067E30FE077A58E818801FA2f}} & Blockscout\\
+LiquidVault & \href{https://base-sepolia.blockscout.com/address/0x7C0fC1a0551d5099d093E8D8b34a214758f7B27a}{\texttt{\footnotesize 0x7C0fC1a0551d5099d093E8D8b34a214758f7B27a}} & Blockscout\\
+TimedVault & \href{https://repo.sourcify.dev/84532/0x7ffD08b7b52E26023142060D3f5dBDe27757CD84}{\texttt{\footnotesize 0x7ffD08b7b52E26023142060D3f5dBDe27757CD84}} & Sourcify, exact match\\
+BoundraFactory & \href{https://repo.sourcify.dev/84532/0xFbD91368BfFA9AF5C7034bCB7F53Cc1eC906b7f4}{\texttt{\footnotesize 0xFbD91368BfFA9AF5C7034bCB7F53Cc1eC906b7f4}} & Sourcify, exact match; Blockscout\\
+BoundraExecutor (the evidence run's) & \href{https://repo.sourcify.dev/84532/0x0e4c01b7fAc2e45a2a38eA7B9A0744D4eF0e9E2E}{\texttt{\footnotesize 0x0e4c01b7fAc2e45a2a38eA7B9A0744D4eF0e9E2E}} & Sourcify, exact match\\
+\end{stable}
+{\small\muted{An exact match means the deployed bytecode equals the compiled source including its compiler metadata. Verified with Foundry (\code{forge verify-contract}), Solidity 0.8.30.}\par}
 
 \begin{note}[Before any real funds]
 An independent audit of the contracts, a second RPC source, fee replacement for stuck transactions, real vault integrations with their own review, monitoring and alerts, and a legal review.

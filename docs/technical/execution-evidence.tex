@@ -132,6 +132,6 @@ cast tx <hash> from      --rpc-url https://sepolia.base.org   # the sender above
 cast tx <hash> to        --rpc-url https://sepolia.base.org   # executor, factory, faucet or MockUSDC
 \end{lstlisting}
 
-The contract addresses come from the reviewed manifest \code{deploy/manifests/base-sepolia.json}; their deployed bytecode was compared with the repository's compiled contracts before they were pinned.
+The contract addresses come from the reviewed manifest \code{deploy/manifests/base-sepolia.json}; their deployed bytecode was compared with the repository's compiled contracts before they were pinned. Their source is also published and verified on independent explorers: MockUSDC, the faucet and LiquidVault on \href{https://base-sepolia.blockscout.com}{Blockscout}; TimedVault, the factory and this journey's executor on \href{https://sourcify.dev}{Sourcify} (exact match). So the calls in the table above can be read against the exact code that ran.
 
 \end{document}
