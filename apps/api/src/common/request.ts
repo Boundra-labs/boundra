@@ -2,10 +2,14 @@ import { createParamDecorator, SetMetadata, type ExecutionContext } from '@nestj
 import type { Request } from 'express';
 import type { z } from 'zod';
 
+export type SessionKind = 'COOKIE' | 'TOKEN';
+
 export interface AuthenticatedOwner {
   id: string;
   address: string;
   sessionId: string;
+  /** COOKIE for the web app, TOKEN for an SDK or MCP client's bearer token. */
+  kind: SessionKind;
 }
 
 export type OwnerRequest = Request & { owner?: AuthenticatedOwner };

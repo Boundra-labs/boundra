@@ -17,6 +17,8 @@ const randomAddress = () => `0x${randomBytes(20).toString('hex')}`;
 
 class FakeGateway implements ChainGateway {
   configured = true;
+  /** False: this deployment runs no Boundra agent (OPERATOR_ADDRESS unset). */
+  boundraAgent = true;
   executors = new Map<string, string>();
   balances = new Map<string, bigint>();
   readonly manifest = {
@@ -38,7 +40,9 @@ class FakeGateway implements ChainGateway {
   };
   readonly operator = '0x00000000000000000000000000000000000000d1';
   deployment() {
-    return this.configured ? { manifest: this.manifest, operator: this.operator } : null;
+    return this.configured
+      ? { manifest: this.manifest, operator: this.boundraAgent ? this.operator : null }
+      : null;
   }
   async findExecutor(owner: string) {
     const address = this.executors.get(owner.toLowerCase());
@@ -216,9 +220,10 @@ describe('Boundra API (PostgreSQL)', () => {
         .send({ message: phishing, signature: await account.signMessage({ message: phishing }) });
       expect(foreign.body.error.code).toBe('CHALLENGE_INVALID');
 
+      // Well in the past: the database compares with its own clock, which may lag this host's.
       await db.authChallenge.updateMany({
         where: { address: account.address.toLowerCase() },
-        data: { expiresAt: new Date(Date.now() - 1000) },
+        data: { expiresAt: new Date(Date.now() - 60_000) },
       });
       const expired = await http()
         .post('/api/v1/auth/verify')
@@ -227,6 +232,125 @@ describe('Boundra API (PostgreSQL)', () => {
           signature: await account.signMessage({ message: challenge.body.message }),
         });
       expect(expired.body.error.code).toBe('CHALLENGE_INVALID');
+    });
+
+    it('issues an API token for a token challenge, with its own consent wording', async () => {
+      const account = newAccount();
+      addresses.push(account.address.toLowerCase());
+      const challenge = await http()
+        .post('/api/v1/auth/challenge')
+        .send({ address: account.address, client: 'token' });
+      expect(challenge.status).toBe(201);
+      expect(challenge.body.message).toContain('API token');
+      expect(challenge.body.message).toContain('cannot sign transactions or move funds');
+      const verified = await http()
+        .post('/api/v1/auth/verify')
+        .send({
+          message: challenge.body.message,
+          signature: await account.signMessage({ message: challenge.body.message }),
+        });
+      expect(verified.status).toBe(200);
+      expect(verified.headers['set-cookie']).toBeUndefined();
+      expect(verified.body).toMatchObject({ address: account.address.toLowerCase() });
+      expect(verified.body.csrfToken).toBeUndefined();
+      const bearer = `Bearer ${verified.body.token}`;
+      // No Origin or CSRF token: a browser never attaches this header on its own.
+      const created = await http()
+        .post('/api/v1/intents')
+        .set('Authorization', bearer)
+        .send(intentBody);
+      expect(created.status).toBe(201);
+      const session = await http().get('/api/v1/auth/session').set('Authorization', bearer);
+      expect(session.body).toEqual({
+        address: account.address.toLowerCase(),
+        kind: 'token',
+        csrfToken: null,
+        admin: false,
+      });
+      // The token is not a cookie, and the cookie is not a token.
+      const asCookie = await http()
+        .get('/api/v1/dashboard')
+        .set('Cookie', `__Host-boundra_session=${verified.body.token}`);
+      expect(asCookie.status).toBe(401);
+      const browser = await login();
+      const cookieToken = browser.cookie.split('=')[1]!;
+      const asBearer = await http()
+        .get('/api/v1/dashboard')
+        .set('Authorization', `Bearer ${cookieToken}`);
+      expect(asBearer.status).toBe(401);
+      // The owner sees and revokes tokens from the web app only, and only their own.
+      const listed = await as(browser).get('/auth/tokens');
+      expect(listed.body.items).toEqual([]);
+      const own = await http().get('/api/v1/auth/tokens').set('Authorization', bearer);
+      expect(own.status).toBe(403);
+      // A bad bearer token is rejected even next to a valid cookie.
+      const mixed = await http()
+        .get('/api/v1/dashboard')
+        .set('Cookie', browser.cookie)
+        .set('Authorization', 'Bearer not-a-token');
+      expect(mixed.status).toBe(401);
+      expect((await http().post('/api/v1/auth/logout').set('Authorization', bearer)).status).toBe(
+        204,
+      );
+      expect((await http().get('/api/v1/dashboard').set('Authorization', bearer)).status).toBe(401);
+    });
+
+    it('lets the owner list and revoke the tokens they gave out, and nobody else’s', async () => {
+      const s = await login();
+      const challenge = await http()
+        .post('/api/v1/auth/challenge')
+        .send({ address: s.account.address, client: 'token' });
+      const { token } = (
+        await http()
+          .post('/api/v1/auth/verify')
+          .send({
+            message: challenge.body.message,
+            signature: await s.account.signMessage({ message: challenge.body.message }),
+          })
+      ).body;
+      const listed = await as(s).get('/auth/tokens');
+      expect(listed.body.items).toHaveLength(1);
+      expect(Object.keys(listed.body.items[0]).sort()).toEqual([
+        'createdAt',
+        'expiresAt',
+        'id',
+        'lastSeenAt',
+      ]);
+      const id = listed.body.items[0].id;
+      const other = await login();
+      expect((await as(other).post(`/auth/tokens/${id}/revoke`)).status).toBe(404);
+      expect((await as(s).post('/auth/tokens/not-a-uuid/revoke')).status).toBe(404);
+      // The browser session itself is not a token and cannot be revoked here.
+      const self = await db.authSession.findFirstOrThrow({
+        where: { owner: { address: s.address }, kind: 'COOKIE' },
+      });
+      expect((await as(s).post(`/auth/tokens/${self.id}/revoke`)).status).toBe(404);
+      expect(
+        (await http().get('/api/v1/dashboard').set('Authorization', `Bearer ${token}`)).status,
+      ).toBe(200);
+      expect((await as(s).post(`/auth/tokens/${id}/revoke`)).status).toBe(204);
+      expect(
+        (await http().get('/api/v1/dashboard').set('Authorization', `Bearer ${token}`)).status,
+      ).toBe(401);
+      expect((await as(s).get('/auth/tokens')).body.items).toEqual([]);
+    });
+
+    it('rejects a signed statement that is not one of ours', async () => {
+      const account = newAccount();
+      addresses.push(account.address.toLowerCase());
+      const challenge = await http()
+        .post('/api/v1/auth/challenge')
+        .send({ address: account.address, client: 'token' });
+      const altered = challenge.body.message.replace(
+        /^Give an app.*$/m,
+        'Sign in to Boundra. Totally harmless.',
+      );
+      expect(altered).not.toBe(challenge.body.message);
+      const verified = await http()
+        .post('/api/v1/auth/verify')
+        .send({ message: altered, signature: await account.signMessage({ message: altered }) });
+      expect(verified.status).toBe(401);
+      expect(verified.body.error.code).toBe('CHALLENGE_INVALID');
     });
 
     it('requires a session, and logout revokes it', async () => {
@@ -312,6 +436,72 @@ describe('Boundra API (PostgreSQL)', () => {
   });
 
   describe('clarification → draft → approval', () => {
+    /** A signed-in owner with a registered executor and an intent ready for a draft. */
+    async function readyForDraft() {
+      const s = await login();
+      gateway.executors.set(s.address, randomAddress());
+      expect((await as(s).post('/executors/register')).status).toBe(200);
+      const created = await as(s).post('/intents', intentBody);
+      await as(s).post(`/intents/${created.body.id}/answers`, {
+        questionId: created.body.question.questionId,
+        alternativeId: 'no_lockup',
+      });
+      return { s, intentId: created.body.id as string };
+    }
+
+    it('lets the owner name their own agent, marks it in the preview and keeps it across edits', async () => {
+      const { s, intentId } = await readyForDraft();
+      const agent = randomAddress();
+      const own = await as(s).post(`/intents/${intentId}/mandate-drafts`, { operator: agent });
+      expect(own.status).toBe(201);
+      expect(own.body.tuple.operator).toBe(agent);
+      expect(own.body.preview.operatorSource).toBe('OWNER');
+      expect(own.body.preview.notices[0]).toMatch(/You chose the agent/);
+      const edited = await as(s).patch(`/mandate-drafts/${own.body.id}`, { expiryDays: 6 });
+      expect(edited.body.tuple.operator).toBe(agent);
+      expect(edited.body.preview.operatorSource).toBe('OWNER');
+      const back = await as(s).patch(`/mandate-drafts/${edited.body.id}`, {
+        operator: gateway.operator,
+      });
+      expect(back.body.tuple.operator).toBe(gateway.operator);
+      expect(back.body.preview.operatorSource).toBeUndefined();
+
+      for (const operator of [
+        gateway.manifest.riskAdmin,
+        gateway.manifest.liquidVault,
+        s.address,
+      ]) {
+        const refused = await as(s).post(`/intents/${intentId}/mandate-drafts`, { operator });
+        expect(refused.status).toBe(400);
+        expect(refused.body.error.code).toBe('VALIDATION_FAILED');
+      }
+      const executor = gateway.executors.get(s.address)!;
+      const asExecutor = await as(s).post(`/intents/${intentId}/mandate-drafts`, {
+        operator: executor,
+      });
+      expect(asExecutor.body.error.message).toBe('Invalid mandate: OPERATOR_IS_EXECUTOR');
+    });
+
+    it('needs the owner’s own agent when the deployment runs no Boundra agent', async () => {
+      const { s, intentId } = await readyForDraft();
+      gateway.boundraAgent = false;
+      try {
+        expect((await http().get('/api/v1/config/public')).body).toMatchObject({
+          configured: true,
+          operator: null,
+        });
+        const missing = await as(s).post(`/intents/${intentId}/mandate-drafts`);
+        expect(missing.status).toBe(400);
+        expect(missing.body.error.message).toMatch(/runs no Boundra agent/);
+        const agent = randomAddress();
+        const own = await as(s).post(`/intents/${intentId}/mandate-drafts`, { operator: agent });
+        expect(own.status).toBe(201);
+        expect(own.body.preview.operatorSource).toBe('OWNER');
+      } finally {
+        gateway.boundraAgent = true;
+      }
+    });
+
     it('persona A: one question, LiquidVault draft, stale and superseded approvals rejected', async () => {
       const s = await login();
       const created = await as(s).post('/intents', intentBody);
@@ -453,6 +643,23 @@ describe('Boundra API (PostgreSQL)', () => {
       expect(denied.status).toBe(403);
       const root = await login(admin);
       expect((await as(root).get('/auth/session')).body.admin).toBe(true);
+      // Admin actions need the admin's browser session, not an API token.
+      const challenge = await http()
+        .post('/api/v1/auth/challenge')
+        .send({ address: admin.address, client: 'token' });
+      const { token } = (
+        await http()
+          .post('/api/v1/auth/verify')
+          .send({
+            message: challenge.body.message,
+            signature: await admin.signMessage({ message: challenge.body.message }),
+          })
+      ).body;
+      const viaToken = await http()
+        .post('/api/v1/admin/demo/reset')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ ownerAddress: user.address });
+      expect(viaToken.status).toBe(403);
       const reset = await as(root).post('/admin/demo/reset', { ownerAddress: user.address });
       expect(reset.body).toEqual({ intents: 1, mandates: 0 });
       expect((await as(user).get(`/intents/${created.body.id}`)).body.state).toBe('REJECTED');

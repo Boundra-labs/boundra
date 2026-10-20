@@ -20,6 +20,7 @@ function AccountMenu() {
       <nav className="app-nav" aria-label="App">
         <Link href="/app">Overview</Link>
         <Link href="/app?new=1">New goal</Link>
+        <Link href="/app/connect">Apps &amp; AI</Link>
         {riskAdmin && <Link href="/app/risk">Vault conditions</Link>}
       </nav>
       <span className="app-account-address" title={current.address}>

@@ -22,13 +22,15 @@ export interface ClaimedJob {
 /**
  * Inserts a job unless one with the same key already exists. Pass the transaction client of
  * the workflow change so the state update and its follow-up work commit atomically (outbox).
+ * Without `availableAt` the job is due at the database's `now()`, the clock `claim` compares
+ * against, so an app host whose clock runs behind the database cannot delay it.
  */
 export async function enqueueJob(db: SqlClient, job: JobInput): Promise<boolean> {
   if (!job.key || job.key.length > 200) throw new Error('Invalid job key');
   const count = await db.$executeRaw`
     INSERT INTO "Job" ("id", "key", "kind", "payload", "availableAt", "maxAttempts", "updatedAt")
     VALUES (gen_random_uuid(), ${job.key}, ${job.kind}, ${JSON.stringify(job.payload)}::jsonb,
-            ${job.availableAt ?? new Date()}, ${job.maxAttempts ?? 5}, now())
+            COALESCE(${job.availableAt ?? null}::timestamptz, now()), ${job.maxAttempts ?? 5}, now())
     ON CONFLICT ("key") DO NOTHING`;
   return count === 1;
 }

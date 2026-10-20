@@ -6,14 +6,28 @@ import { BASE_SEPOLIA_CHAIN_ID } from '@boundra/shared';
 import { APP_CONFIG, type AppConfig } from '../config';
 import { DatabaseService } from '../database.service';
 import { ApiError } from '../common/errors';
-import type { AuthenticatedOwner } from '../common/request';
+import { isUuid, type AuthenticatedOwner, type SessionKind } from '../common/request';
 
 export const SESSION_COOKIE = '__Host-boundra_session';
 const sha256 = (value: string) => createHash('sha256').update(value).digest('hex');
 
+/** Who the session is for: the web app, or an app or AI assistant using the API directly. */
+export type SignInClient = 'browser' | 'token';
+
+// The statement is part of what the owner signs, so it decides which kind of session they get.
+export const SIGN_IN_STATEMENTS: Record<SignInClient, string> = {
+  browser:
+    'Sign in to Boundra. This signature only starts an app session; it does not approve any mandate or transaction.',
+  token:
+    'Give an app or AI assistant an API token for your Boundra account. It can read your account and prepare mandates for you to review; it does not approve any mandate or transaction, and it cannot sign transactions or move funds.',
+};
+const KIND_OF: Record<SignInClient, SessionKind> = { browser: 'COOKIE', token: 'TOKEN' };
+
 export interface SessionGrant {
   token: string;
-  csrfToken: string;
+  /** Only for browser sessions; a browser never attaches a bearer token on its own. */
+  csrfToken: string | null;
+  kind: SessionKind;
   address: string;
   expiresAt: Date;
 }
@@ -33,7 +47,7 @@ export class AuthService {
   }
 
   /** EIP-4361 challenge bound to this origin, Base Sepolia and a single-use nonce. */
-  async createChallenge(addressInput: string) {
+  async createChallenge(addressInput: string, client: SignInClient = 'browser') {
     const address = getAddress(addressInput);
     const nonce = generateSiweNonce();
     const issuedAt = new Date();
@@ -47,8 +61,7 @@ export class AuthService {
       nonce,
       issuedAt,
       expirationTime: expiresAt,
-      statement:
-        'Sign in to Boundra. This signature only starts an app session; it does not approve any mandate or transaction.',
+      statement: SIGN_IN_STATEMENTS[client],
     });
     await this.database.client.authChallenge.create({
       data: {
@@ -83,6 +96,11 @@ export class AuthService {
       throw new ApiError(HttpStatus.UNAUTHORIZED, 'WRONG_CHAIN', 'Sign in on Base Sepolia (84532)');
     if (fields.domain !== this.domain || fields.uri !== this.uri || fields.version !== '1')
       throw invalid();
+    const client = (Object.keys(SIGN_IN_STATEMENTS) as SignInClient[]).find(
+      (key) => SIGN_IN_STATEMENTS[key] === fields.statement,
+    );
+    if (!client) throw invalid();
+    const kind = KIND_OF[client];
     let signer: string;
     try {
       signer = await recoverMessageAddress({ message, signature });
@@ -109,14 +127,15 @@ export class AuthService {
     const token = randomBytes(32).toString('base64url');
     const expiresAt = new Date(Date.now() + this.config.SESSION_TTL_HOURS * 3_600_000);
     const session = await this.database.client.authSession.create({
-      data: { tokenHash: sha256(token), csrfTokenHash: '', ownerId: owner.id, expiresAt },
+      data: { tokenHash: sha256(token), csrfTokenHash: '', kind, ownerId: owner.id, expiresAt },
     });
+    if (kind === 'TOKEN') return { token, csrfToken: null, kind, address, expiresAt };
     const csrfToken = this.csrfFor(session.id);
     await this.database.client.authSession.update({
       where: { id: session.id },
       data: { csrfTokenHash: sha256(csrfToken) },
     });
-    return { token, csrfToken, address, expiresAt };
+    return { token, csrfToken, kind, address, expiresAt };
   }
 
   /** CSRF token derived from the session ID so it can be re-issued without being stored. */
@@ -133,19 +152,48 @@ export class AuthService {
     return expected.length === actual.length && timingSafeEqual(expected, actual);
   }
 
-  async resolveSession(token: string | undefined): Promise<AuthenticatedOwner | null> {
+  /** A cookie only resolves browser sessions, and a bearer token only API tokens. */
+  async resolveSession(
+    token: string | undefined,
+    kind: SessionKind,
+  ): Promise<AuthenticatedOwner | null> {
     if (!token || token.length > 100) return null;
     const session = await this.database.client.authSession.findUnique({
       where: { tokenHash: sha256(token) },
       include: { owner: true },
     });
-    if (!session || session.revokedAt || session.expiresAt <= new Date()) return null;
+    if (!session || session.kind !== kind || session.revokedAt || session.expiresAt <= new Date())
+      return null;
     if (Date.now() - session.lastSeenAt.getTime() > 60_000)
       await this.database.client.authSession.update({
         where: { id: session.id },
         data: { lastSeenAt: new Date() },
       });
-    return { id: session.ownerId, address: session.owner.address, sessionId: session.id };
+    return {
+      id: session.ownerId,
+      address: session.owner.address,
+      sessionId: session.id,
+      kind: session.kind,
+    };
+  }
+
+  /** The owner's live API tokens (never their values, which are only stored hashed). */
+  listTokens(ownerId: string) {
+    return this.database.client.authSession.findMany({
+      where: { ownerId, kind: 'TOKEN', revokedAt: null, expiresAt: { gt: new Date() } },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, createdAt: true, expiresAt: true, lastSeenAt: true },
+    });
+  }
+
+  /** Revokes one of the owner's API tokens; false when there is no such live token. */
+  async revokeToken(ownerId: string, tokenId: string) {
+    if (!isUuid(tokenId)) return false;
+    const result = await this.database.client.authSession.updateMany({
+      where: { id: tokenId, ownerId, kind: 'TOKEN', revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    return result.count === 1;
   }
 
   async revoke(sessionId: string) {
@@ -168,6 +216,13 @@ export function readCookie(header: string | undefined, name: string): string | u
       return decodeURIComponent(part.slice(index + 1).trim());
   }
   return undefined;
+}
+
+/** The token from `Authorization: Bearer <token>`: undefined without the header, '' if malformed. */
+export function readBearer(header: string | undefined): string | undefined {
+  if (header === undefined) return undefined;
+  const match = /^Bearer (\S+)$/.exec(header.trim());
+  return match ? match[1]! : '';
 }
 
 export function sessionCookie(token: string, maxAgeSeconds: number) {

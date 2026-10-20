@@ -74,9 +74,21 @@ function MandateSheet({ view }: { view: MandateView }) {
         <Row label="Owner">
           <Address value={p.owner} you />
         </Row>
-        <Row label="Agent (operator)" hint="Can only call deposit and withdraw on your executor.">
-          <Address value={p.operator} />
-        </Row>
+        {p.operatorSource === 'OWNER' ? (
+          <Row
+            label="Agent (operator)"
+            hint="An agent you chose. Boundra does not run it or vouch for it; it can still only call deposit and withdraw within these limits."
+          >
+            <Address value={p.operator} /> · your own agent
+          </Row>
+        ) : (
+          <Row
+            label="Agent (operator)"
+            hint="Boundra’s agent. Can only call deposit and withdraw on your executor."
+          >
+            <Address value={p.operator} />
+          </Row>
+        )}
         <Row label="Executor" hint="Holds the funds you delegate; only you control its mandate.">
           {p.executor ? <Address value={p.executor} /> : 'Not registered'}
         </Row>

@@ -4,6 +4,7 @@ import { summarizeMandate, type LlmProvider } from '@boundra/llm';
 import { hashMandate } from '@boundra/chain';
 import { enqueueJob, type Mandate } from '@boundra/database';
 import {
+  addressSchema,
   hashSchema,
   mandateTupleFromRow,
   tokenAmountSchema,
@@ -24,6 +25,8 @@ export const draftSchema = z
     expiryDays: z.number().int().min(1).max(60).optional(),
     maxDepositPerAction: tokenAmountSchema.optional(),
     maxWithdrawPerAction: tokenAmountSchema.optional(),
+    /** The owner's own agent; omitted means Boundra's agent (or, when editing, the same agent). */
+    operator: addressSchema.optional(),
   })
   .strict();
 export const approveSchema = z.object({ previewHash: hashSchema }).strict();
@@ -62,6 +65,7 @@ export class MandatesService {
         'Your executor is not registered yet',
         'Call createExecutor() on the factory from your wallet, then POST /executors/register.',
       );
+    const operator = this.chooseOperator(input.operator, deployment);
     const questions = await this.db.question.findMany({
       where: { intentId },
       orderBy: { order: 'asc' },
@@ -70,7 +74,8 @@ export class MandatesService {
     try {
       result = buildMandate({
         owner: owner.address,
-        operator: deployment.operator,
+        operator: operator.address,
+        ownerChosenOperator: operator.ownerChosen,
         asset: deployment.manifest.mockUsdc,
         executor: executor.address,
         vaultAddresses: {
@@ -174,8 +179,49 @@ export class MandatesService {
   }
 
   async revise(owner: AuthenticatedOwner, draftId: string, body: unknown) {
+    const input = parse(draftSchema, body);
     const draft = await this.load(owner, draftId);
-    return this.createDraft(owner, draft.intentId, body);
+    // Editing limits never swaps the agent behind the owner's back.
+    return this.createDraft(owner, draft.intentId, {
+      ...input,
+      operator: input.operator ?? draft.operator,
+    });
+  }
+
+  /**
+   * The owner may name their own agent. It can never be a Boundra contract or the risk admin;
+   * the ACCE builder and the executor contract also refuse the owner and the executor itself.
+   */
+  private chooseOperator(
+    requested: string | undefined,
+    deployment: NonNullable<ReturnType<ChainGateway['deployment']>>,
+  ) {
+    const boundra = deployment.operator?.toLowerCase() ?? null;
+    const address = requested?.toLowerCase() ?? boundra;
+    if (!address)
+      throw new ApiError(
+        HttpStatus.BAD_REQUEST,
+        'VALIDATION_FAILED',
+        'This deployment runs no Boundra agent, so the mandate needs your own operator',
+        'Send the address of the agent you run as `operator`.',
+      );
+    const { manifest } = deployment;
+    const reserved = [
+      manifest.factory,
+      manifest.mockUsdc,
+      manifest.faucet,
+      manifest.liquidVault,
+      manifest.timedVault,
+      manifest.riskAdmin,
+    ].map((value) => value.toLowerCase());
+    if (reserved.includes(address))
+      throw new ApiError(
+        HttpStatus.BAD_REQUEST,
+        'VALIDATION_FAILED',
+        'Invalid mandate: OPERATOR_NOT_ALLOWED',
+        'The operator must be your agent’s own address, not a Boundra contract or the risk admin.',
+      );
+    return { address, ownerChosen: address !== boundra };
   }
 
   async get(owner: AuthenticatedOwner, draftId: string) {

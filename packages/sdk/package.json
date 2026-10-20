@@ -1,0 +1,26 @@
+{
+  "name": "@boundra/sdk",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Boundra for developers and AI agents: the owner API client and a bounded operator (Base Sepolia testnet only).",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.test.json",
+    "test": "vitest run",
+    "test:e2e:chain": "tsx --test --test-timeout=300000 tests/*.chain.ts"
+  },
+  "dependencies": {
+    "@boundra/chain": "workspace:*",
+    "@boundra/shared": "workspace:*",
+    "viem": "2.57.7"
+  },
+  "devDependencies": {
+    "tsx": "4.23.15",
+    "vitest": "5.0.4"
+  }
+}

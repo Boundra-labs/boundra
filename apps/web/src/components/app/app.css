@@ -974,8 +974,9 @@
   text-decoration: underline;
 }
 
-/* Demo risk admin: vault conditions */
-.risk-page {
+/* Demo risk admin: vault conditions; apps and AI assistants */
+.risk-page,
+.connect-page {
   display: grid;
   gap: 24px;
   max-width: 1040px;
@@ -1016,6 +1017,62 @@
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
+}
+
+/* Apps and AI assistants: API tokens */
+.connect-page > *,
+.new-token > * {
+  min-width: 0;
+}
+.connect-page .review-list {
+  margin-top: 16px;
+}
+.connect-page .form-actions {
+  margin-top: 24px;
+}
+.connect-page .form-actions + .field-note {
+  margin-top: 10px;
+}
+.new-token {
+  display: grid;
+  gap: 10px;
+  margin-top: 24px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+}
+.new-token .panel-heading {
+  margin: 0;
+}
+.token-value {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+.token-value code {
+  flex: 1 1 280px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+.token-config pre {
+  overflow-x: auto;
+  margin: 10px 0 0;
+}
+.token-list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.token-item {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
 }
 
 @media (max-width: 900px) {

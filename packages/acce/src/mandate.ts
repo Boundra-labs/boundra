@@ -41,6 +41,8 @@ export class MandateBuildError extends Error {
 export interface MandateBuildInput {
   owner: string;
   operator: string;
+  /** True when the owner named the operator (their own agent) instead of Boundra's agent. */
+  ownerChosenOperator?: boolean;
   asset: string;
   executor?: string;
   vaultAddresses: Record<VaultKey, string>;
@@ -60,6 +62,8 @@ export interface MandatePreview {
   network: { chainId: number; name: string };
   owner: string;
   operator: string;
+  /** Present only when the owner named the operator; absent means Boundra's own agent. */
+  operatorSource?: 'OWNER';
   executor: string | null;
   beneficiary: string;
   token: { address: string; symbol: 'MockUSDC'; decimals: number };
@@ -176,7 +180,11 @@ export function buildMandate(input: MandateBuildInput): MandateBuildResult {
     maxWithdrawPerAction: maxWithdrawPerAction.toString(),
     allocationTarget: input.amount.toString(),
   });
+  // The executor contract rejects these operators too; fail before the owner reviews anything.
   if (tuple.operator === tuple.beneficiary) throw new MandateBuildError('OPERATOR_IS_OWNER');
+  if (input.executor && tuple.operator === lower(input.executor))
+    throw new MandateBuildError('OPERATOR_IS_EXECUTOR');
+  if (/^0x0{40}$/.test(tuple.operator)) throw new MandateBuildError('OPERATOR_IS_ZERO');
 
   const candidates: Candidate[] = evaluateCandidates(values);
   const notices = [
@@ -196,6 +204,10 @@ export function buildMandate(input: MandateBuildInput): MandateBuildResult {
       `${vault.name} locks deposits for 30 days with no early exit, even if a risk warning appears.`,
     );
   for (const conflict of detectConflicts(input.state)) notices.push(conflict.message);
+  if (input.ownerChosenOperator)
+    notices.unshift(
+      'You chose the agent for this mandate yourself. Boundra does not run it or vouch for it; your executor contract still enforces every limit here, and you can pause or revoke it at any time.',
+    );
 
   const preview: MandatePreview = {
     version: PREVIEW_VERSION,
@@ -204,6 +216,7 @@ export function buildMandate(input: MandateBuildInput): MandateBuildResult {
     network: { chainId: BASE_SEPOLIA_CHAIN_ID, name: 'Base Sepolia (testnet)' },
     owner: lower(input.owner),
     operator: tuple.operator,
+    ...(input.ownerChosenOperator ? { operatorSource: 'OWNER' as const } : {}),
     executor: input.executor ? lower(input.executor) : null,
     beneficiary: tuple.beneficiary,
     token: { address: tuple.asset, symbol: 'MockUSDC', decimals: MOCK_USDC_DECIMALS },

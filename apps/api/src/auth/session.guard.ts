@@ -9,13 +9,15 @@ import { Reflector } from '@nestjs/core';
 import { APP_CONFIG, type AppConfig } from '../config';
 import { ApiError } from '../common/errors';
 import { IS_ADMIN, IS_PUBLIC, type OwnerRequest } from '../common/request';
-import { AuthService, readCookie, SESSION_COOKIE } from './auth.service';
+import { AuthService, readBearer, readCookie, SESSION_COOKIE } from './auth.service';
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 /**
- * Global guard (PRD §10.1): a valid session cookie for every non-public route, and for state
- * changes an allowed Origin plus the session's CSRF token. Admin routes also need an admin wallet.
+ * Global guard (PRD §10.1): a valid session for every non-public route. Browser sessions use the
+ * cookie, and their state changes also need an allowed Origin plus the session's CSRF token. SDK
+ * and MCP clients send an API token as `Authorization: Bearer`; a browser never attaches it on its
+ * own, so it needs no CSRF token. Admin routes need an admin wallet signed in through the web app.
  */
 @Injectable()
 export class SessionGuard implements CanActivate {
@@ -29,16 +31,22 @@ export class SessionGuard implements CanActivate {
     const targets = [context.getHandler(), context.getClass()];
     if (this.reflector.getAllAndOverride<boolean>(IS_PUBLIC, targets)) return true;
     const request = context.switchToHttp().getRequest<OwnerRequest>();
-    const owner = await this.auth.resolveSession(
-      readCookie(request.headers.cookie, SESSION_COOKIE),
-    );
+    const bearer = readBearer(request.headers.authorization);
+    // A presented bearer token is never silently replaced by the cookie.
+    const owner =
+      bearer === undefined
+        ? await this.auth.resolveSession(
+            readCookie(request.headers.cookie, SESSION_COOKIE),
+            'COOKIE',
+          )
+        : await this.auth.resolveSession(bearer, 'TOKEN');
     if (!owner)
       throw new ApiError(
         HttpStatus.UNAUTHORIZED,
         'UNAUTHENTICATED',
         'Sign in with your wallet first',
       );
-    if (!SAFE_METHODS.has(request.method)) {
+    if (owner.kind === 'COOKIE' && !SAFE_METHODS.has(request.method)) {
       const origin = request.headers.origin;
       const csrf = request.headers['x-csrf-token'];
       if (
@@ -54,7 +62,7 @@ export class SessionGuard implements CanActivate {
     }
     if (
       this.reflector.getAllAndOverride<boolean>(IS_ADMIN, targets) &&
-      !this.auth.isAdmin(owner.address)
+      (owner.kind !== 'COOKIE' || !this.auth.isAdmin(owner.address))
     )
       throw new ApiError(HttpStatus.FORBIDDEN, 'FORBIDDEN', 'Demo-admin access required');
     request.owner = owner;

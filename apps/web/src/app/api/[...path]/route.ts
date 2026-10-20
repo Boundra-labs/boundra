@@ -5,12 +5,13 @@
  * covers `next dev` and the Compose stack, where only the web container is exposed.
  *
  * The upstream is read per request (not baked in at build time like a rewrite), and only
- * `/api/v1/*` paths are forwarded.
+ * `/api/v1/*` paths are forwarded. SDK and MCP clients' bearer API tokens pass through too.
  */
 export const dynamic = 'force-dynamic';
 
 const FORWARDED_REQUEST_HEADERS = [
   'accept',
+  'authorization',
   'content-type',
   'cookie',
   'origin',
