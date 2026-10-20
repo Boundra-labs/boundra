@@ -1,3 +1,7 @@
+# Hosts that build only the last stage (Render) choose the image with this build argument:
+# web, api, worker or migrate. Compose and the release workflow pick a target instead.
+ARG BOUNDRA_SERVICE=web
+
 FROM node:22.22.0-bookworm-slim AS base
 ENV COREPACK_HOME=/opt/corepack
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates openssl \
@@ -27,6 +31,8 @@ RUN pnpm --filter @boundra/api deploy --legacy --prod /out/api \
     && pnpm --filter @boundra/worker deploy --legacy --prod /out/worker
 
 FROM build AS migrate
+# Reviewed deployment manifests at the path Compose mounts them, for hosts without that volume.
+RUN mkdir -p /config && cp -r deploy/manifests /config/manifests
 USER node
 CMD ["pnpm", "db:migrate"]
 
@@ -37,6 +43,7 @@ ENV BOUNDRA_RELEASE=$RELEASE
 LABEL org.opencontainers.image.version=$RELEASE
 ENV NODE_ENV=production
 COPY --from=build --chown=node:node /out/api /app
+COPY --from=build /app/deploy/manifests /config/manifests
 USER node
 EXPOSE 3001
 CMD ["node", "dist/main.js"]
@@ -48,6 +55,7 @@ ENV BOUNDRA_RELEASE=$RELEASE
 LABEL org.opencontainers.image.version=$RELEASE
 ENV NODE_ENV=production
 COPY --from=build --chown=node:node /out/worker /app
+COPY --from=build /app/deploy/manifests /config/manifests
 USER node
 CMD ["node", "dist/main.js"]
 
@@ -62,3 +70,5 @@ COPY --from=build --chown=node:node /app/apps/web/.next/static /app/apps/web/.ne
 USER node
 EXPOSE 3000
 CMD ["node", "apps/web/server.js"]
+
+FROM ${BOUNDRA_SERVICE} AS selected

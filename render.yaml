@@ -1,0 +1,135 @@
+# Render Blueprint: the web app (public), the API (private network only), the worker and
+# PostgreSQL, all in one region. Every service builds the same Dockerfile; BOUNDRA_SERVICE (passed
+# to the build as an argument) picks the image. Values marked `sync: false` are secrets or
+# per-deployment settings entered in the Render dashboard when the Blueprint is first created;
+# never commit them. Setup and checks: docs/deploy-render.md.
+
+databases:
+  - name: boundra-db
+    region: singapore
+    postgresMajorVersion: '17'
+    databaseName: boundra
+    user: boundra
+
+services:
+  - type: web
+    name: boundra-web
+    runtime: docker
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: BOUNDRA_SERVICE
+        value: web
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: '3000'
+      # The API's private address (host:port); only the web app is public.
+      - key: API_INTERNAL_URL
+        fromService:
+          type: pserv
+          name: boundra-api
+          property: hostport
+
+  # Built from the migrate image so the pre-deploy command can apply migrations before each release.
+  - type: pserv
+    name: boundra-api
+    runtime: docker
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    dockerCommand: node apps/api/dist/main.js
+    preDeployCommand: pnpm db:migrate
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: BOUNDRA_SERVICE
+        value: migrate
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: boundra-db
+          property: connectionString
+      - key: API_HOST
+        value: 0.0.0.0
+      - key: API_PORT
+        value: '3001'
+      - key: PORT
+        value: '3001'
+      - key: CHAIN_ID
+        value: '84532'
+      - key: BASE_SEPOLIA_RPC_URL
+        value: https://sepolia.base.org
+      - key: DEPLOYMENT_MANIFEST_PATH
+        value: /config/manifests/base-sepolia.json
+      - key: CHAIN_CONFIRMATIONS
+        value: '5'
+      - key: WORKER_HEARTBEAT_MAX_AGE_MS
+        value: '45000'
+      # Behind Render's proxy and the web app's /api proxy.
+      - key: TRUST_PROXY
+        value: 'true'
+      - key: SESSION_SECRET
+        generateValue: true
+      # The web app's public origin, e.g. https://boundra-web.onrender.com or a custom domain.
+      - key: WEB_ORIGIN
+        sync: false
+      # Boundra's agent: public address only, never the key.
+      - key: OPERATOR_ADDRESS
+        sync: false
+      # Risk admin wallet(s), lowercase, comma-separated.
+      - key: ADMIN_ADDRESSES
+        sync: false
+      - key: LLM_PROVIDER
+        value: openai
+      - key: LLM_MODEL
+        value: gpt-4.1-mini
+      - key: LLM_API_KEY
+        sync: false
+
+  - type: worker
+    name: boundra-worker
+    runtime: docker
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: BOUNDRA_SERVICE
+        value: worker
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: boundra-db
+          property: connectionString
+      - key: CHAIN_ID
+        value: '84532'
+      - key: BASE_SEPOLIA_RPC_URL
+        value: https://sepolia.base.org
+      - key: DEPLOYMENT_MANIFEST_PATH
+        value: /config/manifests/base-sepolia.json
+      - key: CHAIN_CONFIRMATIONS
+        value: '5'
+      - key: WORKER_POLL_INTERVAL_MS
+        value: '10000'
+      - key: RECEIPT_REORG_WINDOW_BLOCKS
+        value: '20'
+      - key: MONITOR_BATCH_BLOCKS
+        value: '180'
+      - key: EXECUTION_ENABLED
+        value: 'true'
+      # The agent's own key (never the owner's, deployer's or risk admin's).
+      - key: OPERATOR_PRIVATE_KEY
+        sync: false
+      # 64 hex characters; `node scripts/setup.mjs --deploy` generates one.
+      - key: ATTEMPT_ENCRYPTION_KEY
+        sync: false
+      - key: MAX_GAS
+        value: '1000000'
+      - key: MAX_FEE_PER_GAS_WEI
+        value: '1000000000'
+      - key: MAX_PRIORITY_FEE_PER_GAS_WEI
+        value: '100000000'
+      - key: ACTION_DEADLINE_SECONDS
+        value: '300'

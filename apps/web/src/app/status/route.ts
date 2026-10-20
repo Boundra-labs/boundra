@@ -1,3 +1,5 @@
+import { apiInternalUrl } from '@/lib/api-upstream';
+
 export const dynamic = 'force-dynamic';
 
 const RELEASE = process.env.BOUNDRA_RELEASE ?? 'dev';
@@ -8,8 +10,7 @@ const RELEASE = process.env.BOUNDRA_RELEASE ?? 'dev';
  */
 export async function GET() {
   try {
-    const baseUrl = process.env.API_INTERNAL_URL ?? 'http://127.0.0.1:3001';
-    const response = await fetch(new URL('/api/v1/health/ready', baseUrl), {
+    const response = await fetch(new URL('/api/v1/health/ready', apiInternalUrl()), {
       cache: 'no-store',
       signal: AbortSignal.timeout(4000),
     });
