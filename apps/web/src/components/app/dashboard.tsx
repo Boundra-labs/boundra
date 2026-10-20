@@ -137,13 +137,16 @@ function ControlButton({
   request,
   owner,
   onConfirmed,
+  waiting,
   quiet,
 }: {
   label: string;
   confirmedText: string;
   request: ContractRequest;
   owner: Address;
-  onConfirmed: (text: string, hash: Hash) => void;
+  onConfirmed: (text: string, hash: Hash, block: bigint) => void;
+  /** A confirmed owner action is not in the overview yet; sending again would duplicate it. */
+  waiting: boolean;
   quiet?: boolean;
 }) {
   const tx = useOwnerTransaction(owner, explainOwnerAction);
@@ -151,10 +154,11 @@ function ControlButton({
     <div className="control">
       <button
         className={`button${quiet ? ' button-quiet' : ''}`}
-        disabled={isBusy(tx.state)}
+        disabled={isBusy(tx.state) || waiting}
         onClick={() =>
           void tx.send(request).then((state) => {
-            if (state.phase === 'confirmed') onConfirmed(confirmedText, state.hash);
+            if (state.phase === 'confirmed')
+              onConfirmed(confirmedText, state.hash, state.receipt.blockNumber);
           })
         }
       >
@@ -173,12 +177,14 @@ function Controls({
   owner,
   onConfirmed,
   notice,
+  waiting,
 }: {
   data: DashboardData;
   owner: Address;
-  onConfirmed: (text: string, hash: Hash) => void;
+  onConfirmed: (text: string, hash: Hash, block: bigint) => void;
   /** The last confirmed owner action; kept even after its button disappears. */
   notice: { text: string; hash: Hash } | null;
+  waiting: boolean;
 }) {
   const [confirmRevoke, setConfirmRevoke] = useState(false);
   const chain = data.chain!;
@@ -191,7 +197,7 @@ function Controls({
     { key: 'LIQUID' as const, position: chain.positions[0] },
     { key: 'TIMED' as const, position: chain.positions[1] },
   ].filter(({ position }) => BigInt(position.withdrawable) > 0n);
-  const common = { owner, onConfirmed };
+  const common = { owner, onConfirmed, waiting };
 
   return (
     <aside className="panel panel-quiet controls" aria-labelledby="controls-heading">
@@ -205,6 +211,7 @@ function Controls({
       {notice && (
         <p className="tx-status is-confirmed" role="status">
           {notice.text} (<TxLink hash={notice.hash} />)
+          {waiting && ' Updating from the chain; this can take up to a minute.'}
         </p>
       )}
 
@@ -243,7 +250,11 @@ function Controls({
               </button>
             </div>
           ) : (
-            <button className="button button-quiet" onClick={() => setConfirmRevoke(true)}>
+            <button
+              className="button button-quiet"
+              disabled={waiting}
+              onClick={() => setConfirmRevoke(true)}
+            >
               Revoke the mandate…
             </button>
           )}
@@ -287,8 +298,8 @@ function Controls({
   );
 }
 
-function Activity() {
-  const activity = useActivity();
+function Activity({ pollMs }: { pollMs?: number }) {
+  const activity = useActivity({ pollMs });
   const items = activity.data?.pages.flatMap((page) => page.items) ?? [];
   return (
     <section className="panel activity" aria-labelledby="activity-heading">
@@ -347,18 +358,28 @@ function Activity() {
 export function Dashboard() {
   const session = useOwnerSession();
   const queryClient = useQueryClient();
-  // After an owner action, keep re-reading briefly: the API reads at its confirmation depth.
-  const [catchingUp, setCatchingUp] = useState(false);
+  // After an owner action the API only shows it once its confirmed view (read at the API's
+  // confirmation depth) reaches the transaction's block. Keep re-reading until then, for at most
+  // 90 seconds, and keep the controls disabled meanwhile so the action is not sent twice.
+  const [awaitBlock, setAwaitBlock] = useState<bigint | null>(null);
   const [notice, setNotice] = useState<{ text: string; hash: Hash } | null>(null);
-  const dashboard = useDashboard({ pollMs: catchingUp ? 2000 : undefined });
+  const pollMs = awaitBlock === null ? undefined : 2000;
+  const dashboard = useDashboard({ pollMs });
+  const shownBlock = dashboard.data?.chain ? BigInt(dashboard.data.chain.blockNumber) : null;
+  const waiting = awaitBlock !== null && (shownBlock === null || shownBlock < awaitBlock);
   useEffect(() => {
-    if (!catchingUp) return;
-    const timer = setTimeout(() => setCatchingUp(false), 20_000);
+    if (awaitBlock === null || waiting) return;
+    setAwaitBlock(null);
+    void queryClient.invalidateQueries({ queryKey: ACTIVITY_KEY });
+  }, [awaitBlock, waiting, queryClient]);
+  useEffect(() => {
+    if (awaitBlock === null) return;
+    const timer = setTimeout(() => setAwaitBlock(null), 90_000);
     return () => clearTimeout(timer);
-  }, [catchingUp]);
-  const onConfirmed = (text: string, hash: Hash) => {
+  }, [awaitBlock]);
+  const onConfirmed = (text: string, hash: Hash, block: bigint) => {
     setNotice({ text, hash });
-    setCatchingUp(true);
+    setAwaitBlock(block);
     void queryClient.invalidateQueries({ queryKey: DASHBOARD_KEY });
     void queryClient.invalidateQueries({ queryKey: ACTIVITY_KEY });
   };
@@ -430,9 +451,10 @@ export function Dashboard() {
           owner={session.address as Address}
           onConfirmed={onConfirmed}
           notice={notice}
+          waiting={waiting}
         />
       )}
-      <Activity />
+      <Activity pollMs={pollMs} />
     </div>
   );
 }
