@@ -28,7 +28,7 @@ const CASE_TAGS = new Set([
   'safe-no-trade',
   'indonesian',
 ]);
-/** task-assignment §5 and PRD §3.2: every one of these must appear in both splits. */
+/** the release checklist and PRD §3.2: every one of these must appear in both splits. */
 const REQUIRED_IN_EACH_SPLIT = [
   'same-prompt',
   'liquidity-need',

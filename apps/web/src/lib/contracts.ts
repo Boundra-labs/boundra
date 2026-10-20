@@ -1,5 +1,5 @@
 /**
- * Person 1's generated ABIs and mandate helpers. They are imported file by file: the package root
+ * the generated ABIs and mandate helpers. They are imported file by file: the package root
  * also exports the Node-only manifest loader, which must not reach the browser bundle.
  */
 import { boundraExecutorAbi } from '@boundra/chain/dist/abis/BoundraExecutor';

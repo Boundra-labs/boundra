@@ -44,7 +44,7 @@ Stuck actions stay `RECONCILE` and are retried automatically; an operator EOA no
 1. Stop the worker, then the API (`docker compose stop worker api`), so nothing writes or signs meanwhile.
 2. Run the drill on the dump you intend to use.
 3. Restore into a new database, e.g. `createdb boundra_restored` then `pg_restore --no-owner --exit-on-error -d boundra_restored < file.dump` inside the `postgres` container, and point `DATABASE_URL` at it. Keep the old database until the service is verified.
-4. Start the API, check `/api/v1/health/ready`, then start the worker. A restored database can be behind the chain: the worker rescans from its saved cursor, and the executor itself rejects a second allocation (`BudgetExceeded`) or a reused action ID (`Replay`), as Person 2's chain E2E shows. Follow Person 2's worker recovery notes before letting it execute again.
+4. Start the API, check `/api/v1/health/ready`, then start the worker. A restored database can be behind the chain: the worker rescans from its saved cursor, and the executor itself rejects a second allocation (`BudgetExceeded`) or a reused action ID (`Replay`), as the chain E2E shows. Follow the worker recovery notes before letting it execute again.
 
 ## Deploy, release and roll back
 
@@ -62,6 +62,6 @@ Stuck actions stay `RECONCILE` and are retried automatically; an operator EOA no
 
 ## Before public deployment
 
-Still open: a host and domain, Person 1's reviewed Base Sepolia manifest, runtime secrets in the deployment secret facility, monitoring/alerts, and the 60-minute soak. Person 1/2 supply chain/worker recovery procedures after implementing them. `deploy/Caddyfile` is a reverse-proxy template, not an already configured production host.
+Still open: a host and domain, the reviewed Base Sepolia manifest, runtime secrets in the deployment secret facility, monitoring/alerts, and the 60-minute soak. `deploy/Caddyfile` is a reverse-proxy template, not an already configured production host.
 
 Do not expose PostgreSQL or mount owner keys. Runtime secrets belong in the deployment secret facility. Local `.env` is gitignored and excluded from Docker builds.

@@ -1,6 +1,6 @@
 {
   "fixtureVersion": "example-prd-v1",
-  "provenance": "EXAMPLE ONLY: the three demo personas from PRD §3.2 plus one misleading-description case, written by Person 2 to exercise the runner. Not the frozen 50-persona benchmark, which Person 3 authors and Person 1 reviews.",
+  "provenance": "EXAMPLE ONLY: the three demo personas from PRD §3.2 plus one misleading-description case, written to exercise the runner. Not the frozen 50-persona benchmark (boundra-personas-v1.json).",
   "frozen": false,
   "personas": [
     {

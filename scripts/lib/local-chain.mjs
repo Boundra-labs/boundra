@@ -1,6 +1,6 @@
 /**
  * Local chain helpers shared by scripts/dev-chain.mjs and the browser E2E setup: anvil with Base
- * Sepolia's chain ID (84532), Person 1's real deploy script and a manifest pinned to the deployed
+ * Sepolia's chain ID (84532), the real deploy script and a manifest pinned to the deployed
  * code hashes.
  *
  * Every key here comes from anvil's public development mnemonic. Those keys are published and

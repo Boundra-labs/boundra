@@ -4,7 +4,7 @@
 
 ## Status
 
-Built and tested: Person 1's contracts (deployed on Base Sepolia, reviewed manifest in `deploy/manifests/base-sepolia.json`), typed chain modules and deploy script; Person 2's SIWE sessions and API tokens, REST API with OpenAPI, deterministic ACCE planner and mandate builder, PostgreSQL schema, durable execution and monitor stores, the bounded agent loop (deposit, risk exit, escalation, revocation) with crash recovery, validated LLM wording (OpenAI or Anthropic) and the B0–B3 benchmark runner; Person 3's owner web app, browser end-to-end suites, the SDK and MCP server, and the deployable stack (Docker Compose with Caddy, or Render).
+Built and tested: the contracts (deployed on Base Sepolia, reviewed manifest in `deploy/manifests/base-sepolia.json`), typed chain modules and deploy script; the SIWE sessions and API tokens, REST API with OpenAPI, deterministic ACCE planner and mandate builder, PostgreSQL schema, durable execution and monitor stores, the bounded agent loop (deposit, risk exit, escalation, revocation) with crash recovery, validated LLM wording (OpenAI or Anthropic) and the B0–B3 benchmark runner; the owner web app, browser end-to-end suites, the SDK and MCP server, and the deployable stack (Docker Compose with Caddy, or Render).
 
 The full flow is proven end to end on a local anvil chain (`pnpm test:e2e:chain`, `pnpm test:e2e:real`), and the stack runs against the Base Sepolia deployment. Still open: the frozen 50-persona benchmark run, monitoring and alerts, and an independent security review. No addresses, transaction hashes, benchmark results or performance claims are invented.
 
@@ -55,7 +55,7 @@ The worker starts independently and reports its mode in the heartbeat: `observe_
 
 ### Local chain (optional)
 
-Creating an intent checks your MockUSDC balance on chain, so the owner journey needs a deployment. Before (or instead of) the public Base Sepolia deployment, run Person 1's contracts on a local anvil chain:
+Creating an intent checks your MockUSDC balance on chain, so the owner journey needs a deployment. Before (or instead of) the public Base Sepolia deployment, run the contracts on a local anvil chain:
 
 ```sh
 node scripts/dev-chain.mjs --fund 0xYourWalletAddress
@@ -83,24 +83,24 @@ On the public Base Sepolia none of the gas or relay workarounds apply: MetaMask'
 ```text
 apps/web/                      Next.js + React + Tailwind + wagmi
 apps/api/                      NestJS API + OpenAPI
-apps/worker/src/chain/         Person 1: chain execution/monitoring boundary
-apps/worker/src/orchestration/ Person 2: decision policy, orchestrator, job runner
-apps/worker/src/persistence/  Person 2: PostgreSQL execution/monitor stores
+apps/worker/src/chain/         Chain execution/monitoring boundary
+apps/worker/src/orchestration/ Decision policy, orchestrator, job runner
+apps/worker/src/persistence/  PostgreSQL execution/monitor stores
 packages/shared/              Zod schemas and exact amount types
 packages/database/            PostgreSQL + Prisma client/migrations
 packages/chain/               viem read client, deployment manifest, mandate hashing
-packages/acce/                Person 2: deterministic ACCE planner and mandate builder
-packages/llm/                 Person 2: optional validated LLM wording/summaries
+packages/acce/                Deterministic ACCE planner and mandate builder
+packages/llm/                 Optional validated LLM wording/summaries
 packages/sdk/                 SDK for developers and agents: owner API client, bounded operator
 apps/mcp/                     MCP server for AI assistants (stdio), on top of the SDK
 contracts/                    Solidity + OpenZeppelin + Foundry
-evaluation/                   Person 2: B0–B3 benchmark runner (fixtures: Person 3)
+evaluation/                   B0–B3 benchmark runner
 tests/e2e/                    Playwright: UI on real contracts, API mocked
 tests/e2e-real/               Playwright: full journeys on the real API, worker and chain
 deploy/                       Reverse-proxy template
 ```
 
-See [PRD](./prd.md), [three-person assignment](./task-assignment.md), and [runbook](./docs/runbook.md). Developers and AI assistants: [SDK](./packages/sdk/README.md), [MCP server](./apps/mcp/README.md) and [what they guarantee](./docs/roadmap-sdk-mcp.md); owners create API tokens in the app under **Apps & AI**.
+See [PRD](./prd.md) and [runbook](./docs/runbook.md). Developers and AI assistants: [SDK](./packages/sdk/README.md), [MCP server](./apps/mcp/README.md) and [what they guarantee](./docs/roadmap-sdk-mcp.md); owners create API tokens in the app under **Apps & AI**.
 
 ## Checks
 
@@ -119,7 +119,7 @@ pnpm test:e2e
 pnpm test:e2e:real
 ```
 
-`test:integration` requires a migrated PostgreSQL database and creates/removes only its own random fixture records. `test:e2e:chain` starts anvil (chain ID 84532), deploys with the contracts' deploy script, migrates and drops its own temporary database, and runs the API and worker end to end; it also runs the SDK's operator against the contracts. It needs PostgreSQL but no keys or public RPC. `pnpm benchmark -- --fixture <file>` runs B0–B3 (see `evaluation/README.md`). Both browser suites use an in-page test wallet instead of MetaMask (anvil's public development keys only) and start their own web server and local chain. `test:e2e` checks every screen and owner transaction against Person 1's real contracts, with the API mocked. `test:e2e:real` mocks nothing: it starts the real API and worker (execute mode) on a temporary PostgreSQL database and runs the required journey (sign-in → setup → goal → ACCE → review → authorize and fund → agent deposit → risk event set by the risk admin's wallet → agent exit and escalation → revoke → owner recovery) and the same-prompt, two-persona walkthrough. Its LLM provider is configured but simulated as overloaded, so it also proves that a provider failure falls back to labelled template wording without blocking anything. It needs PostgreSQL but no keys; service logs land in `tmp/e2e-real/logs/`.
+`test:integration` requires a migrated PostgreSQL database and creates/removes only its own random fixture records. `test:e2e:chain` starts anvil (chain ID 84532), deploys with the contracts' deploy script, migrates and drops its own temporary database, and runs the API and worker end to end; it also runs the SDK's operator against the contracts. It needs PostgreSQL but no keys or public RPC. `pnpm benchmark -- --fixture <file>` runs B0–B3 (see `evaluation/README.md`). Both browser suites use an in-page test wallet instead of MetaMask (anvil's public development keys only) and start their own web server and local chain. `test:e2e` checks every screen and owner transaction against the real contracts, with the API mocked. `test:e2e:real` mocks nothing: it starts the real API and worker (execute mode) on a temporary PostgreSQL database and runs the required journey (sign-in → setup → goal → ACCE → review → authorize and fund → agent deposit → risk event set by the risk admin's wallet → agent exit and escalation → revoke → owner recovery) and the same-prompt, two-persona walkthrough. Its LLM provider is configured but simulated as overloaded, so it also proves that a provider failure falls back to labelled template wording without blocking anything. It needs PostgreSQL but no keys; service logs land in `tmp/e2e-real/logs/`.
 
 `pnpm check` groups lint, typecheck, unit tests, app builds and contract tests. PostgreSQL integration and browser checks are separate commands. The first contract build downloads the pinned Solidity compiler. Prisma uses its v7 generated client and PostgreSQL driver adapter; `build:packages` generates the client automatically.
 

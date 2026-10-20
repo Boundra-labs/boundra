@@ -1,5 +1,5 @@
 /**
- * Local development chain: anvil with Base Sepolia's chain ID (84532) and Person 1's real deploy
+ * Local development chain: anvil with Base Sepolia's chain ID (84532) and the real deploy
  * script, plus a manifest pinned to the deployed code hashes. It lets the web app, API and worker
  * run the full owner journey before (or without) a public testnet deployment.
  *

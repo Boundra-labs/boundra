@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Restore drill (task-assignment §5): restores a backup into a separate, throwaway PostgreSQL
+ * Restore drill: restores a backup into a separate, throwaway PostgreSQL
  * instance and proves it is usable, without touching the running database.
  *
  *   node scripts/restore-drill.mjs [path/to/boundra-<stamp>.dump]   (default: newest in BACKUP_DIR)

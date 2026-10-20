@@ -84,7 +84,7 @@ function encodeAction(action: ActionRequest): Hex {
   return encodeFunctionData({ abi: boundraExecutorAbi, functionName, args });
 }
 
-/** Not registered in WorkerModule until Person 2 supplies the durable store and lifecycle wiring. */
+/** Registered by the worker runtime together with the durable PostgreSQL execution store. */
 export class OperatorExecutionService {
   constructor(
     private readonly reader: BoundraChainReader,

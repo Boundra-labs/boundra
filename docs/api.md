@@ -1,4 +1,4 @@
-# Boundra API — Person 2
+# Boundra API
 
 REST API under `/api/v1` (NestJS). The machine-readable contract is [openapi.json](./openapi.json), regenerated with `pnpm --filter @boundra/api openapi:export`; Swagger UI is served at `/api/docs` outside production. Base Sepolia testnet only; all token amounts are **base-unit strings** (MockUSDC has 6 decimals), never numbers.
 

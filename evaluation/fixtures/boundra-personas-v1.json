@@ -1,6 +1,6 @@
 {
   "fixtureVersion": "boundra-personas-v1",
-  "provenance": "Synthetic personas authored by Person 3 on 2026-10-17 (task-assignment §5, PRD §3.2 and §13.1). Labels follow the rubric in evaluation/fixtures/README.md. The four prd-* personas repeat the PRD demo personas, which every team member has seen, so they are development only. The author had read the answer simulator and the mandate builder before writing the personas; see README limitations. Label review by Person 1: pending. Not frozen.",
+  "provenance": "Synthetic personas authored on 2026-10-17. Labels follow the rubric in evaluation/fixtures/README.md. The four prd-* personas repeat the PRD demo personas, which every team member has seen, so they are development only. The author had read the answer simulator and the mandate builder before writing the personas; see README limitations. Label review by Pending. Not frozen.",
   "frozen": false,
   "personas": [
     {

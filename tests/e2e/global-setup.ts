@@ -4,7 +4,7 @@ import { deployBoundra, isChainUp, repo, startAnvil } from '../../scripts/lib/lo
 import { CHAIN_FILE, E2E_RPC_URL } from './support/chain';
 
 /**
- * Browser tests that send transactions run against Person 1's real contracts on a local anvil
+ * Browser tests that send transactions run against the real contracts on a local anvil
  * chain (chain ID 84532). A chain already listening on the port (for example
  * `node scripts/dev-chain.mjs`) is reused; otherwise one is started and stopped afterwards.
  * Fresh contracts are deployed for every run, so tests never share chain state with dev data.

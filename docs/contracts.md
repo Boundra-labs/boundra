@@ -1,4 +1,4 @@
-# Contract interface — Person 1
+# Contract interface
 
 ## Mock vaults (implemented)
 
@@ -32,4 +32,4 @@ Canonical `Mandate` tuple: `chainId`, `asset`, `operator`, `beneficiary`, `expir
 - Replacement requires zero positions in both vaults. Resetting deposit budget is therefore a new explicit owner authorization after settlement, never an automatic result of withdrawal.
 - `ActionExecuted(actionId, version, nonce, action, target, amount)` is transaction evidence. A broadcast hash alone is not confirmation.
 
-Typed ABIs and the chain adapter are documented in [chain-integration.md](./chain-integration.md); the deployment script in [deployment.md](./deployment.md). See PRD §13.1 and `task-assignment.md` for integration ownership.
+Typed ABIs and the chain adapter are documented in [chain-integration.md](./chain-integration.md); the deployment script in [deployment.md](./deployment.md).

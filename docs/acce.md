@@ -1,4 +1,4 @@
-# ACCE and agent policy — Person 2
+# ACCE and agent policy
 
 Action-Conditioned Counterfactual Elicitation asks only questions whose answer can change which action the agent may take. Everything that decides authority is deterministic (`packages/acce`, `apps/worker/src/orchestration/decision.ts`); a language model may only reword text, and every model output is validated with a deterministic fallback.
 
