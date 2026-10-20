@@ -32,8 +32,18 @@ async function bootstrap() {
   await app.listen(config.API_PORT, config.API_HOST);
 }
 
+/** Configuration errors name settings, never values; anything else is reported by type and code only. */
+function startupReason(error: unknown): string {
+  if (!(error instanceof Error)) return 'unknown error';
+  if (/^Invalid [\w ]+configuration/.test(error.message)) return error.message;
+  const code = (error as { code?: unknown }).code;
+  return typeof code === 'string' ? `${error.name} (${code})` : error.name;
+}
+
 if (require.main === module)
-  void bootstrap().catch(() => {
-    console.error('API startup failed. Check configuration, PostgreSQL and migrations.');
+  void bootstrap().catch((error: unknown) => {
+    console.error(
+      `API startup failed: ${startupReason(error)}. Check configuration, PostgreSQL and migrations.`,
+    );
     process.exitCode = 1;
   });

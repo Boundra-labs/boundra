@@ -36,7 +36,17 @@ async function bootstrap() {
   console.log(`Boundra worker started (release ${process.env.BOUNDRA_RELEASE ?? 'dev'})`);
 }
 
-void bootstrap().catch(() => {
-  console.error('Worker startup failed. Check configuration, PostgreSQL and migrations.');
+/** Configuration errors name settings, never values; anything else is reported by type and code only. */
+function startupReason(error: unknown): string {
+  if (!(error instanceof Error)) return 'unknown error';
+  if (/^Invalid [\w ]+configuration/.test(error.message)) return error.message;
+  const code = (error as { code?: unknown }).code;
+  return typeof code === 'string' ? `${error.name} (${code})` : error.name;
+}
+
+void bootstrap().catch((error: unknown) => {
+  console.error(
+    `Worker startup failed: ${startupReason(error)}. Check configuration, PostgreSQL and migrations.`,
+  );
   process.exitCode = 1;
 });
